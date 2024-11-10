@@ -7,16 +7,6 @@ st.set_page_config(layout="wide")
 
 st.title('Property Items Summary')
 
-# Define file paths
-DATA_DIR = "data"
-STAYING_ITEMS_FILE = os.path.join(DATA_DIR, "staying_items.csv")
-PRICED_ITEMS_FILE = os.path.join(DATA_DIR, "priced_items.csv")
-SOLD_ITEMS_FILE = os.path.join(DATA_DIR, "sold_items.csv")
-
-# Create data directory if it doesn't exist
-os.makedirs(DATA_DIR, exist_ok=True)
-
-
 # Initialize default data
 def get_default_staying_items():
     return pd.DataFrame({
@@ -30,7 +20,6 @@ def get_default_staying_items():
         'Notes': ['', '', '', '', '', '', '', 'Includes boxspring and frame']
     })
 
-
 def get_default_priced_items():
     return pd.DataFrame({
         'Item': ['Back porch cabinet below TV', 'Hot Tub TV',
@@ -43,54 +32,22 @@ def get_default_priced_items():
         'Price': [100.00, 100.00, 250.00, 100.00, 850.00, 1500.00, 1500.00,
                   100.00, 2000.00, 100.00, 850.00, 100.00, 50.00],
         'Notes': [''] * 13
-    })
-
+    }).astype({'Price': 'float64', 'Item': 'str', 'Notes': 'str'})  # Explicitly set data types
 
 def get_default_sold_items():
     return pd.DataFrame({
         'Item': ['Generator', 'Wicker Furniture'],
         'Price': [500.00, 300.00],
         'Notes': ['Sold 11/10', 'Sold 11/9']
-    })
+    }).astype({'Price': 'float64', 'Item': 'str', 'Notes': 'str'})  # Explicitly set data types
 
-
-# Load data from CSV files or create with defaults
-def load_data():
-    try:
-        staying_items = pd.read_csv(STAYING_ITEMS_FILE)
-    except FileNotFoundError:
-        staying_items = get_default_staying_items()
-        staying_items.to_csv(STAYING_ITEMS_FILE, index=False)
-
-    try:
-        priced_items = pd.read_csv(PRICED_ITEMS_FILE)
-    except FileNotFoundError:
-        priced_items = get_default_priced_items()
-        priced_items.to_csv(PRICED_ITEMS_FILE, index=False)
-
-    try:
-        sold_items = pd.read_csv(SOLD_ITEMS_FILE)
-    except FileNotFoundError:
-        sold_items = get_default_sold_items()
-        sold_items.to_csv(SOLD_ITEMS_FILE, index=False)
-
-    return staying_items, priced_items, sold_items
-
-
-# Save data to CSV files
-def save_data(staying_items, priced_items, sold_items):
-    staying_items.to_csv(STAYING_ITEMS_FILE, index=False)
-    priced_items.to_csv(PRICED_ITEMS_FILE, index=False)
-    sold_items.to_csv(SOLD_ITEMS_FILE, index=False)
-
-
-# Initialize session state with data from files
-if 'data_loaded' not in st.session_state:
-    staying_items, priced_items, sold_items = load_data()
-    st.session_state['staying_items'] = staying_items
-    st.session_state['priced_items'] = priced_items
-    st.session_state['sold_items'] = sold_items
-    st.session_state['data_loaded'] = True
+# Initialize session state
+if 'staying_items' not in st.session_state:
+    st.session_state['staying_items'] = get_default_staying_items()
+if 'priced_items' not in st.session_state:
+    st.session_state['priced_items'] = get_default_priced_items()
+if 'sold_items' not in st.session_state:
+    st.session_state['sold_items'] = get_default_sold_items()
 
 # Items Staying with House
 st.header('Items Staying with House')
@@ -113,11 +70,13 @@ edited_priced = st.data_editor(
     height=600,
     use_container_width=True,
     column_config={
-        "Item": st.column_config.Column("Item", width="large"),
+        "Item": st.column_config.TextColumn("Item", width="large"),
         "Price": st.column_config.NumberColumn(
             "Price",
             format="$%.2f",
-            width="medium"
+            width="medium",
+            step=0.01,
+            min_value=0
         ),
         "Notes": st.column_config.TextColumn("Notes", width="large")
     }
@@ -130,25 +89,22 @@ edited_sold = st.data_editor(
     num_rows="dynamic",
     use_container_width=True,
     column_config={
-        "Item": st.column_config.Column("Item", width="large"),
+        "Item": st.column_config.TextColumn("Item", width="large"),
         "Price": st.column_config.NumberColumn(
             "Price",
             format="$%.2f",
-            width="medium"
+            width="medium",
+            step=0.01,
+            min_value=0
         ),
         "Notes": st.column_config.TextColumn("Notes", width="large")
     }
 )
 
-# Save changes to session state and CSV files
-if (edited_staying is not st.session_state.staying_items or
-        edited_priced is not st.session_state.priced_items or
-        edited_sold is not st.session_state.sold_items):
-    st.session_state.staying_items = edited_staying
-    st.session_state.priced_items = edited_priced
-    st.session_state.sold_items = edited_sold
-
-    save_data(edited_staying, edited_priced, edited_sold)
+# Save changes to session state
+st.session_state.staying_items = edited_staying
+st.session_state.priced_items = edited_priced
+st.session_state.sold_items = edited_sold
 
 st.markdown('*Note: Seller has offered to bundle items together for a flat price rather than price individually.*')
 
