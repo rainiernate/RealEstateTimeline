@@ -46,7 +46,6 @@ def get_default_sold_items():
     return pd.DataFrame({
         'Item': ['Generator', 'Wicker Furniture'],
         'Price': [500.00, 300.00],
-        'Buyer': ['John Smith', 'Jane Doe'],
         'Notes': ['Sold 11/10', 'Sold 11/9']
     })
 
@@ -102,7 +101,6 @@ edited_sold = st.data_editor(
             format="$%.2f",
             width="medium"
         ),
-        "Buyer": st.column_config.Column("Buyer", width="medium"),
         "Notes": st.column_config.TextColumn("Notes", width="large")
     }
 )
