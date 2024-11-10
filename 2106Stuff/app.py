@@ -7,6 +7,16 @@ st.set_page_config(layout="wide")
 
 st.title('Property Items Summary')
 
+# Define file paths
+DATA_DIR = "data"
+STAYING_ITEMS_FILE = os.path.join(DATA_DIR, "staying_items.csv")
+PRICED_ITEMS_FILE = os.path.join(DATA_DIR, "priced_items.csv")
+SOLD_ITEMS_FILE = os.path.join(DATA_DIR, "sold_items.csv")
+
+# Create data directory if it doesn't exist
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
 # Initialize default data
 def get_default_staying_items():
     return pd.DataFrame({
@@ -20,6 +30,7 @@ def get_default_staying_items():
         'Notes': ['', '', '', '', '', '', '', 'Includes boxspring and frame']
     })
 
+
 def get_default_priced_items():
     return pd.DataFrame({
         'Item': ['Back porch cabinet below TV', 'Hot Tub TV',
@@ -32,22 +43,57 @@ def get_default_priced_items():
         'Price': [100.00, 100.00, 250.00, 100.00, 850.00, 1500.00, 1500.00,
                   100.00, 2000.00, 100.00, 850.00, 100.00, 50.00],
         'Notes': [''] * 13
-    }).astype({'Price': 'float64', 'Item': 'str', 'Notes': 'str'})  # Explicitly set data types
+    }).astype({'Price': 'float64', 'Item': 'str', 'Notes': 'str'})
+
 
 def get_default_sold_items():
     return pd.DataFrame({
         'Item': ['Generator', 'Wicker Furniture'],
         'Price': [500.00, 300.00],
         'Notes': ['Sold 11/10', 'Sold 11/9']
-    }).astype({'Price': 'float64', 'Item': 'str', 'Notes': 'str'})  # Explicitly set data types
+    }).astype({'Price': 'float64', 'Item': 'str', 'Notes': 'str'})
 
-# Initialize session state
-if 'staying_items' not in st.session_state:
-    st.session_state['staying_items'] = get_default_staying_items()
-if 'priced_items' not in st.session_state:
-    st.session_state['priced_items'] = get_default_priced_items()
-if 'sold_items' not in st.session_state:
-    st.session_state['sold_items'] = get_default_sold_items()
+
+# Load data from CSV files or create with defaults
+def load_data():
+    try:
+        staying_items = pd.read_csv(STAYING_ITEMS_FILE)
+    except FileNotFoundError:
+        staying_items = get_default_staying_items()
+        staying_items.to_csv(STAYING_ITEMS_FILE, index=False)
+
+    try:
+        priced_items = pd.read_csv(PRICED_ITEMS_FILE)
+        priced_items['Price'] = priced_items['Price'].astype('float64')
+    except FileNotFoundError:
+        priced_items = get_default_priced_items()
+        priced_items.to_csv(PRICED_ITEMS_FILE, index=False)
+
+    try:
+        sold_items = pd.read_csv(SOLD_ITEMS_FILE)
+        sold_items['Price'] = sold_items['Price'].astype('float64')
+    except FileNotFoundError:
+        sold_items = get_default_sold_items()
+        sold_items.to_csv(SOLD_ITEMS_FILE, index=False)
+
+    return staying_items, priced_items, sold_items
+
+
+# Initialize session state with data from files
+if 'data_loaded' not in st.session_state:
+    staying_items, priced_items, sold_items = load_data()
+    st.session_state['staying_items'] = staying_items
+    st.session_state['priced_items'] = priced_items
+    st.session_state['sold_items'] = sold_items
+    st.session_state['data_loaded'] = True
+
+
+# Function to save changes
+def save_changes():
+    st.session_state.staying_items.to_csv(STAYING_ITEMS_FILE, index=False)
+    st.session_state.priced_items.to_csv(PRICED_ITEMS_FILE, index=False)
+    st.session_state.sold_items.to_csv(SOLD_ITEMS_FILE, index=False)
+
 
 # Items Staying with House
 st.header('Items Staying with House')
@@ -55,6 +101,7 @@ edited_staying = st.data_editor(
     st.session_state.staying_items,
     num_rows="dynamic",
     use_container_width=True,
+    key="staying_editor",
     column_config={
         "Item": st.column_config.Column("Item", width="large"),
         "Status": st.column_config.Column("Status", width="medium"),
@@ -62,12 +109,13 @@ edited_staying = st.data_editor(
     }
 )
 
-# Items for Sale (Combined Fixed and Negotiable)
+# Items for Sale
 st.header('Items for Sale')
 edited_priced = st.data_editor(
     st.session_state.priced_items,
     num_rows="dynamic",
     height=600,
+    key="priced_editor",
     use_container_width=True,
     column_config={
         "Item": st.column_config.TextColumn("Item", width="large"),
@@ -87,6 +135,7 @@ st.header('Items Sold')
 edited_sold = st.data_editor(
     st.session_state.sold_items,
     num_rows="dynamic",
+    key="sold_editor",
     use_container_width=True,
     column_config={
         "Item": st.column_config.TextColumn("Item", width="large"),
@@ -101,14 +150,19 @@ edited_sold = st.data_editor(
     }
 )
 
-# Save changes to session state
+# Update session state and save to files
 st.session_state.staying_items = edited_staying
 st.session_state.priced_items = edited_priced
 st.session_state.sold_items = edited_sold
 
+# Save button
+if st.button('Save Changes'):
+    save_changes()
+    st.success('Changes saved successfully!')
+
 st.markdown('*Note: Seller has offered to bundle items together for a flat price rather than price individually.*')
 
-# Direct download button without secondary confirmation
+# Download button
 csv_data = pd.concat([
     edited_staying.assign(Section='Staying with House'),
     edited_priced.assign(Section='For Sale'),
