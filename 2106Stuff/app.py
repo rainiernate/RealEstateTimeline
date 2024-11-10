@@ -6,7 +6,6 @@ st.set_page_config(layout="wide")
 
 st.title('Property Items Summary')
 
-
 # Currency formatting function
 def format_currency(value):
     if pd.isna(value) or value == '':
@@ -16,53 +15,54 @@ def format_currency(value):
     except:
         return value
 
+# Initialize default data
+def get_default_staying_items():
+    return pd.DataFrame({
+        'Item': ['Hot Tub', 'Hot Tub Corner Cabinet', 'Side Yard BBQ Awning',
+                 'Kitchen Refrigerator', 'Metal Racking (Garage)',
+                 'Fixed shelves on wall', 'Clock above fireplace',
+                 'Guest room queen bed (Free if wanted)'],
+        'Status': ['Confirmed', 'Confirmed', 'Confirmed', 'Confirmed',
+                   '**Need to Confirm**', '**Need to Confirm**', '**Need to Confirm**',
+                   '**Need to Confirm if Wanted**'],
+        'Notes': ['', '', '', '', '', '', '', 'Includes boxspring and frame']
+    })
 
-# Load or initialize data
-@st.cache_data
-def init_data():
-    if 'staying_items' not in st.session_state:
-        st.session_state.staying_items = pd.DataFrame({
-            'Item': ['Hot Tub', 'Hot Tub Corner Cabinet', 'Side Yard BBQ Awning',
-                     'Kitchen Refrigerator', 'Metal Racking (Garage)',
-                     'Fixed shelves on wall', 'Clock above fireplace',
-                     'Guest room queen bed (Free if wanted)'],
-            'Status': ['Confirmed', 'Confirmed', 'Confirmed', 'Confirmed',
-                       '**Need to Confirm**', '**Need to Confirm**', '**Need to Confirm**',
-                       '**Need to Confirm if Wanted**'],
-            'Notes': ['', '', '', '', '', '', '', 'Includes boxspring and frame']
-        })
+def get_default_priced_items():
+    return pd.DataFrame({
+        'Item': ['Back porch cabinet below TV', 'Hot Tub TV',
+                 'Outdoor Patio Sitting Furniture', 'Shop TV',
+                 'Washer and Dryer', 'Living Room Couch', 'Living Room TV',
+                 'White Storage Cabinets w/mirrors', 'Sauna',
+                 'Garage Freezer', 'Gym Equipment w/flooring',
+                 'Large Blue Planter Pots by Pond (Negotiable)',
+                 '2 Blue Planter Pots by Garage Doors (Negotiable)'],
+        'Price': [100.00, 100.00, 250.00, 100.00, 850.00, 1500.00, 1500.00,
+                  100.00, 2000.00, 100.00, 850.00, 100.00, 50.00],
+        'Notes': [''] * 13
+    })
 
-    if 'priced_items' not in st.session_state:
-        st.session_state.priced_items = pd.DataFrame({
-            'Item': ['Back porch cabinet below TV', 'Hot Tub TV',
-                     'Outdoor Patio Sitting Furniture', 'Shop TV',
-                     'Washer and Dryer', 'Living Room Couch', 'Living Room TV',
-                     'White Storage Cabinets w/mirrors', 'Sauna',
-                     'Garage Freezer', 'Gym Equipment w/flooring',
-                     'Large Blue Planter Pots by Pond (Negotiable)',
-                     '2 Blue Planter Pots by Garage Doors (Negotiable)'],
-            'Price': [100.00, 100.00, 250.00, 100.00, 850.00, 1500.00, 1500.00,
-                      100.00, 2000.00, 100.00, 850.00, 100.00, 50.00],
-            'Notes': [''] * 13
-        })
+def get_default_sold_items():
+    return pd.DataFrame({
+        'Item': ['Generator', 'Wicker Furniture'],
+        'Price': [500.00, 300.00],
+        'Buyer': ['John Smith', 'Jane Doe'],
+        'Notes': ['Sold 11/10', 'Sold 11/9']
+    })
 
-    if 'sold_items' not in st.session_state:
-        st.session_state.sold_items = pd.DataFrame({
-            'Item': ['Generator', 'Wicker Furniture'],
-            'Price': [500.00, 300.00],
-            'Buyer': ['John Smith', 'Jane Doe'],
-            'Notes': ['Sold 11/10', 'Sold 11/9']
-        })
-
-
-# Initialize data
-init_data()
+# Initialize session state
+if 'staying_items' not in st.session_state:
+    st.session_state['staying_items'] = get_default_staying_items()
+if 'priced_items' not in st.session_state:
+    st.session_state['priced_items'] = get_default_priced_items()
+if 'sold_items' not in st.session_state:
+    st.session_state['sold_items'] = get_default_sold_items()
 
 # Items Staying with House
 st.header('Items Staying with House')
 edited_staying = st.data_editor(
     st.session_state.staying_items,
-    num_rows="dynamic",  # Allows adding/deleting rows
+    num_rows="dynamic",
     use_container_width=True,
     column_config={
         "Item": st.column_config.Column("Item", width="large"),
@@ -75,7 +75,7 @@ edited_staying = st.data_editor(
 st.header('Items for Sale')
 edited_priced = st.data_editor(
     st.session_state.priced_items,
-    num_rows="dynamic",  # Allows adding/deleting rows
+    num_rows="dynamic",
     height=600,
     use_container_width=True,
     column_config={
@@ -93,7 +93,7 @@ edited_priced = st.data_editor(
 st.header('Items Sold')
 edited_sold = st.data_editor(
     st.session_state.sold_items,
-    num_rows="dynamic",  # Allows adding/deleting rows
+    num_rows="dynamic",
     use_container_width=True,
     column_config={
         "Item": st.column_config.Column("Item", width="large"),
