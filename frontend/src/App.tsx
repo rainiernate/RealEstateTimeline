@@ -154,6 +154,11 @@ const getHolidaysInRange = (startDate: string, endDate: string): Contingency[] =
     thanksDay.setDate(thanksDay.getDate() + 21)
     addHolidayIfInRange(thanksDay, "Thanksgiving")
 
+    // Native American Heritage Day (day after Thanksgiving)
+    const nativeAmericanDay = new Date(thanksDay)
+    nativeAmericanDay.setDate(thanksDay.getDate() + 1)
+    addHolidayIfInRange(nativeAmericanDay, "Native American Heritage Day")
+
     addHolidayIfInRange(new Date(y, 11, 25), "Christmas")
   }
 
@@ -191,6 +196,73 @@ function getDatesBetween(start: Date, end: Date): Date[] {
     startDate.setDate(startDate.getDate() + 1)
   }
   return dates
+}
+
+// Helper function to check if a date is a holiday
+const isHoliday = (date: Date): boolean => {
+  const holidays = getHolidaysInRange(
+    new Date(date.getFullYear(), 0, 1).toISOString().split('T')[0],
+    new Date(date.getFullYear(), 11, 31).toISOString().split('T')[0]
+  )
+  return holidays.some(holiday => {
+    const holidayDate = new Date(holiday.fixedDate!)
+    return holidayDate.getFullYear() === date.getFullYear() &&
+           holidayDate.getMonth() === date.getMonth() &&
+           holidayDate.getDate() === date.getDate()
+  })
+}
+
+// Helper function to check if a date is a business day
+const isBusinessDay = (date: Date): boolean => {
+  // Check if it's a weekend
+  if (date.getDay() === 0 || date.getDay() === 6) return false
+  
+  // Check if it's a holiday
+  if (isHoliday(date)) return false
+  
+  return true
+}
+
+// Helper function to get next business day
+const getNextBusinessDay = (date: Date): Date => {
+  const nextDay = new Date(date)
+  nextDay.setDate(nextDay.getDate() + 1)
+  
+  // Skip weekends and holidays
+  while (nextDay.getDay() === 0 || nextDay.getDay() === 6 || isHoliday(nextDay)) {
+    nextDay.setDate(nextDay.getDate() + 1)
+  }
+  return nextDay
+}
+
+// Helper function to get previous business day
+const getPreviousBusinessDay = (date: Date): Date => {
+  const prevDay = new Date(date)
+  prevDay.setDate(prevDay.getDate() - 1)
+  
+  // Skip weekends and holidays
+  while (prevDay.getDay() === 0 || prevDay.getDay() === 6 || isHoliday(prevDay)) {
+    prevDay.setDate(prevDay.getDate() - 1)
+  }
+  return prevDay
+}
+
+// Calculate business days before a date
+const getBusinessDaysBeforeDate = (endDate: Date, daysNeeded: number): Date => {
+  let currentDate = new Date(endDate)
+  let businessDaysFound = 0
+  
+  while (businessDaysFound < daysNeeded) {
+    // Move back one day
+    currentDate.setDate(currentDate.getDate() - 1)
+    
+    // If it's a business day, count it
+    if (isBusinessDay(currentDate)) {
+      businessDaysFound++
+    }
+  }
+  
+  return currentDate
 }
 
 // Reusable Components
@@ -283,124 +355,258 @@ function GanttChart({
   const endDate = parseDate(closingDate)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+
+  // *** Change this number to adjust days after closing ***
+  const daysAfterClosing = 1
+  const extendedEndDate = new Date(endDate)
+  extendedEndDate.setDate(endDate.getDate() + daysAfterClosing)
   
-  const dates = getDatesBetween(startDate, endDate)
+  // *** Change this number to adjust days before mutual ***
+  const daysBeforeMutual = 1
+  const extendedStartDate = new Date(startDate)
+  extendedStartDate.setDate(startDate.getDate() - daysBeforeMutual)
+  
+  const dates = getDatesBetween(extendedStartDate, extendedEndDate)
   
   // Format date to show just the day of the month
   const formatDate = (date: Date) => {
     return date.getDate().toString()
   }
 
-  // Calculate contingency dates
-  const getContingencyDate = (contingency: Contingency): Date | null => {
+  // Calculate contingency start date
+  const getContingencyStartDate = (contingency: Contingency): Date | null => {
     if (contingency.type === 'fixed_date' && contingency.fixedDate) {
       return parseDate(contingency.fixedDate)
     } else if (contingency.type === 'days_from_mutual' && contingency.days !== undefined) {
+      // For days_from_mutual, start from mutual date
       const date = new Date(startDate)
-      date.setDate(startDate.getDate() + contingency.days)
       return date
     } else if (contingency.type === 'days_before_closing' && contingency.days !== undefined) {
-      const date = new Date(endDate)
-      date.setDate(endDate.getDate() - contingency.days)
-      return date
+      // For days_before_closing, calculate back from closing date
+      if (contingency.days <= 5) {
+        // For 5 days or less, strictly use business days
+        return getBusinessDaysBeforeDate(endDate, contingency.days)
+      } else {
+        // For more than 5 days, use calendar days
+        const date = new Date(endDate)
+        date.setDate(endDate.getDate() - contingency.days)
+        return date
+      }
     }
     return null
+  }
+
+  // Calculate contingency end date
+  const getContingencyEndDate = (contingency: Contingency, startDate: Date | null): Date | null => {
+    if (!startDate) return null
+    
+    switch (contingency.type) {
+      case 'fixed_date':
+        // Fixed date contingencies are just markers, so end date is same as start date
+        return startDate
+        
+      case 'days_from_mutual':
+        // Days from mutual spans from mutual date to the calculated end date
+        if (contingency.days !== undefined) {
+          const endDate = new Date(startDate)
+          endDate.setDate(startDate.getDate() + contingency.days)
+          return endDate
+        }
+        return startDate
+        
+      case 'days_before_closing':
+        // Days before closing spans from calculated date to closing
+        return new Date(endDate)
+        
+      default:
+        return startDate
+    }
   }
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Timeline Debug View</CardTitle>
+        <CardTitle>Timeline</CardTitle>
         <CardDescription>
-          Mutual: {mutualDate}<br/>
-          Closing: {closingDate}<br/>
-          Contingencies: {contingencies.length}
+          From {mutualDate} to {closingDate} (+ {daysAfterClosing} days)
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Debug View */}
-        <div className="p-4 border rounded mb-6">
-          <h3 className="font-bold mb-2">Contingencies:</h3>
-          <ul className="list-disc pl-5">
-            {contingencies.map(c => (
-              <li key={c.id}>{c.name} - {c.type}</li>
-            ))}
-          </ul>
-        </div>
-
         {/* Timeline View */}
-        <div className="mt-4 overflow-x-auto">
-          <div className="min-w-full">
+        <div className="mt-4 relative">
+          <div className="overflow-x-auto">
             {/* Timeline Header */}
-            <div className="flex mb-4">
-              <div className="w-48"></div>
-              <div className="flex-1 flex">
-                {dates.map((date, index) => (
-                  <div 
-                    key={index}
-                    className={`w-8 flex-shrink-0 text-center text-sm
-                      ${date.getTime() === today.getTime() ? 'text-red-500 font-medium' : ''}`}
-                  >
-                    {formatDate(date)}
+            <div className="grid grid-cols-[200px_1fr] min-w-full">
+              {/* Title Column */}
+              <div className="border-r pr-4 bg-white sticky left-0 z-10">
+                <div className="h-8 flex items-center">
+                  <span className="text-sm font-semibold">Event</span>
+                </div>
+                {/* Mutual Date */}
+                <div className="h-8 flex items-center">
+                  <span className="text-sm font-bold text-black">Mutual Acceptance</span>
+                </div>
+                {/* Contingency Titles */}
+                {contingencies.map((contingency) => (
+                  <div key={contingency.id} className="h-8 flex items-center">
+                    <span className="text-sm truncate" title={contingency.name}>{contingency.name}</span>
                   </div>
                 ))}
+                {/* Closing Date */}
+                <div className="h-8 flex items-center">
+                  <span className="text-sm font-bold text-black">Closing Date</span>
+                </div>
+              </div>
+
+              {/* Timeline Grid */}
+              <div className="relative">
+                {/* Vertical Lines */}
+                <div className="absolute inset-0 flex pointer-events-none">
+                  {dates.map((date, index) => (
+                    <div 
+                      key={index}
+                      className="w-8 flex-shrink-0 border-r border-gray-100"
+                    />
+                  ))}
+                </div>
+
+                {/* Date Headers */}
+                <div className="flex h-8 relative">
+                  {dates.map((date, index) => {
+                    const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                    const isMutualDate = date.getTime() === startDate.getTime()
+                    const isClosingDate = date.getTime() === endDate.getTime()
+                    
+                    return (
+                      <div 
+                        key={index}
+                        className={`w-8 flex-shrink-0 text-center text-sm flex items-center justify-center
+                          ${isWeekend ? 'font-bold' : ''}
+                          ${isMutualDate || isClosingDate ? 'font-bold text-black' : ''}
+                        `}
+                      >
+                        {formatDate(date)}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Mutual Date Row */}
+                <div className="h-8 flex items-center relative">
+                  {dates.map((timelineDate, index) => {
+                    const isMutualDate = timelineDate.getTime() === startDate.getTime()
+                    return (
+                      <div 
+                        key={index}
+                        className="w-8 flex-shrink-0 relative h-full flex items-center justify-center"
+                      >
+                        {isMutualDate && (
+                          <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black" />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Contingency Rows */}
+                {contingencies.map((contingency) => {
+                  const startDateContingency = getContingencyStartDate(contingency)
+                  const endDateContingency = getContingencyEndDate(contingency, startDateContingency)
+
+                  return (
+                    <div key={contingency.id} className="h-8 flex items-center relative">
+                      {dates.map((timelineDate, index) => {
+                        const isStart = startDateContingency && timelineDate.getTime() === startDateContingency.getTime()
+                        const isEnd = endDateContingency && timelineDate.getTime() === endDateContingency.getTime()
+                        const isWithinRange = startDateContingency && endDateContingency && 
+                          timelineDate >= startDateContingency && timelineDate <= endDateContingency
+
+                        const statusColor = contingency.status === 'completed' ? 'bg-green-500' :
+                          contingency.status === 'overdue' ? 'bg-red-500' :
+                          contingency.status === 'in_progress' ? 'bg-blue-500' :
+                          contingency.status === 'due_today' ? 'bg-yellow-500' :
+                          'bg-gray-500'
+
+                        return (
+                          <div 
+                            key={index}
+                            className="w-8 flex-shrink-0 relative h-full flex items-center justify-center"
+                          >
+                            {contingency.type === 'fixed_date' && isWithinRange ? (
+                              <div 
+                                className={`absolute w-4 h-4 rounded-full flex items-center justify-center ${statusColor}`}
+                                title={contingency.name}
+                              >
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              </div>
+                            ) : isWithinRange && (
+                              <div className="relative w-full h-full flex items-center">
+                                {/* Main line */}
+                                <div 
+                                  className={`absolute h-[2px] ${statusColor}
+                                    ${isStart && isEnd ? 'left-1/2 w-0' : 
+                                      isStart ? 'left-1/2 right-0' :
+                                      isEnd ? 'left-0 w-1/2' : 
+                                      'left-0 right-0'}`}
+                                />
+                                {/* Start cap */}
+                                {isStart && (
+                                  <div className={`absolute left-1/2 w-2 h-2 -ml-1 rounded-full ${statusColor}`} />
+                                )}
+                                {/* End cap */}
+                                {isEnd && (
+                                  <div className={`absolute ${isStart ? 'left-1/2' : 'left-[calc(50%-4px)]'} w-2 h-2 rounded-full ${statusColor}`} />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+
+                {/* Closing Date Row */}
+                <div className="h-8 flex items-center relative">
+                  {dates.map((timelineDate, index) => {
+                    const isClosingDate = timelineDate.getTime() === endDate.getTime()
+                    return (
+                      <div 
+                        key={index}
+                        className="w-8 flex-shrink-0 relative h-full flex items-center justify-center"
+                      >
+                        {isClosingDate && (
+                          <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black" />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Contingency Rows */}
-            {contingencies.map((contingency) => {
-              const date = getContingencyDate(contingency)
-
-              return (
-                <div key={contingency.id} className="flex mb-4 items-center">
-                  <div className="w-48 pr-4">
-                    <span className="text-sm">{contingency.name}</span>
-                  </div>
-                  <div className="flex-1 flex relative">
-                    {dates.map((timelineDate, index) => (
-                      <div 
-                        key={index}
-                        className="w-8 flex-shrink-0 relative"
-                      >
-                        {date && timelineDate.getTime() === date.getTime() && (
-                          <div 
-                            className={`absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full
-                              ${contingency.status === 'completed' ? 'bg-green-500' :
-                                contingency.status === 'overdue' ? 'bg-red-500' :
-                                contingency.status === 'in_progress' ? 'bg-blue-500' :
-                                contingency.status === 'due_today' ? 'bg-yellow-500' :
-                                'bg-gray-500'}`}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Legend */}
-          <div className="mt-4 flex gap-3 text-xs">
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-              <span>Pending</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <span>In Progress</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>Completed</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <span>Overdue</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-              <span>Due Today</span>
+            {/* Legend */}
+            <div className="flex gap-4 text-sm mt-4">
+              <div className="flex items-center gap-1">
+                <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black"></div>
+                <span>Key Dates</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span>Completed</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span>In Progress</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                <span>Due Today</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                <span>Pending</span>
+              </div>
             </div>
           </div>
         </div>
@@ -411,21 +617,12 @@ function GanttChart({
 
 function App() {
   // Primary State
-  const [mutualDate, setMutualDate] = useState(new Date().toISOString().split('T')[0])
-  const [closingDate, setClosingDate] = useState(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  )
+  const [mutualDate, setMutualDate] = useState<string | null>(null)
+  const [closingDate, setClosingDate] = useState<string | null>(null)
 
-  const [contingencies, setContingencies] = useState<Contingency[]>(() => {
-    const initialMutualDate = new Date().toISOString().split('T')[0]
-    const initialClosingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    return [
-      ...getDefaultContingencies(initialMutualDate, initialClosingDate),
-      ...getHolidaysInRange(initialMutualDate, initialClosingDate)
-    ]
-  })
-
+  const [contingencies, setContingencies] = useState<Contingency[]>([])
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([])
+  const [timelineActive, setTimelineActive] = useState(false)
 
   // UI State
   const [showSidebar, setShowSidebar] = useState(true)
@@ -444,7 +641,7 @@ function App() {
   const [contingencyName, setContingencyName] = useState('')
   const [contingencyType, setContingencyType] = useState<ContingencyType>('days_from_mutual')
   const [contingencyDays, setContingencyDays] = useState(5)
-  const [contingencyDate, setContingencyDate] = useState(mutualDate)
+  const [contingencyDate, setContingencyDate] = useState('')
   const [contingencyDescription, setContingencyDescription] = useState('')
   const [isPossessionDate, setIsPossessionDate] = useState(false)
 
@@ -532,7 +729,7 @@ function App() {
       const items: TimelineItem[] = [
         {
           name: "Mutual Acceptance",
-          date: formatDate(mutualDate),
+          date: formatDate(mutualDate!),
           daysFromMutual: 0,
           method: "Start Date",
           notes: "",
@@ -547,9 +744,9 @@ function App() {
         if (contingency.type === 'fixed_date' && contingency.fixedDate) {
           date = formatDate(contingency.fixedDate)
         } else if (contingency.type === 'days_from_mutual' && contingency.days) {
-          date = new Date(formatDate(mutualDate).getTime() + contingency.days * 24 * 60 * 60 * 1000)
+          date = new Date(formatDate(mutualDate!).getTime() + contingency.days * 24 * 60 * 60 * 1000)
         } else if (contingency.type === 'days_before_closing' && contingency.days) {
-          date = new Date(formatDate(closingDate).getTime() - contingency.days * 24 * 60 * 60 * 1000)
+          date = new Date(formatDate(closingDate!).getTime() - contingency.days * 24 * 60 * 60 * 1000)
         } else {
           date = new Date()
         }
@@ -557,7 +754,7 @@ function App() {
         items.push({
           name: contingency.name,
           date,
-          daysFromMutual: Math.round((date.getTime() - formatDate(mutualDate).getTime()) / (1000 * 60 * 60 * 24)),
+          daysFromMutual: Math.round((date.getTime() - formatDate(mutualDate!).getTime()) / (1000 * 60 * 60 * 24)),
           method: contingency.type === 'fixed_date'
             ? 'Fixed Date'
             : contingency.type === 'days_from_mutual'
@@ -574,8 +771,8 @@ function App() {
       // Add closing date
       items.push({
         name: "Closing",
-        date: formatDate(closingDate),
-        daysFromMutual: Math.round((formatDate(closingDate).getTime() - formatDate(mutualDate).getTime()) / (1000 * 60 * 60 * 24)),
+        date: formatDate(closingDate!),
+        daysFromMutual: Math.round((formatDate(closingDate!).getTime() - formatDate(mutualDate!).getTime()) / (1000 * 60 * 60 * 24)),
         method: "End Date",
         notes: "",
         isContingency: false,
@@ -585,7 +782,9 @@ function App() {
       return items.sort((a, b) => a.date.getTime() - b.date.getTime())
     }
 
-    setTimelineItems(calculateTimelineItems())
+    if (mutualDate && closingDate) {
+      setTimelineItems(calculateTimelineItems())
+    }
   }, [mutualDate, closingDate, contingencies])
 
   const handleNewTimeline = () => {
@@ -597,11 +796,22 @@ function App() {
 
     setMutualDate(newMutualDate)
     setClosingDate(newClosingDate)
+    setTimelineActive(true)
 
     const defaultContingencies = getDefaultContingencies(newMutualDate, newClosingDate)
     const holidays = getHolidaysInRange(newMutualDate, newClosingDate)
 
     setContingencies([...defaultContingencies, ...holidays])
+  }
+
+  const handleLoadInstance = (instance: SavedInstance) => {
+    setIsCreatingNew(false)
+    setSelectedInstance(instance.id)
+    setInstanceName(instance.name)
+    setMutualDate(instance.mutualDate)
+    setClosingDate(instance.closingDate)
+    setContingencies(instance.contingencies)
+    setTimelineActive(true)
   }
 
   const handleSaveInstance = () => {
@@ -611,8 +821,8 @@ function App() {
       const newInstance: SavedInstance = {
         id: crypto.randomUUID(),
         name: instanceName,
-        mutualDate,
-        closingDate,
+        mutualDate: mutualDate!,
+        closingDate: closingDate!,
         contingencies,
         createdAt: new Date().toISOString(),
         isArchived: false
@@ -627,8 +837,8 @@ function App() {
             ? {
                 ...instance,
                 name: instanceName,
-                mutualDate,
-                closingDate,
+                mutualDate: mutualDate!,
+                closingDate: closingDate!,
                 contingencies,
                 lastModified: new Date().toISOString()
               }
@@ -636,15 +846,6 @@ function App() {
         )
       )
     }
-  }
-
-  const handleLoadInstance = (instance: SavedInstance) => {
-    setIsCreatingNew(false)
-    setSelectedInstance(instance.id)
-    setInstanceName(instance.name)
-    setMutualDate(instance.mutualDate)
-    setClosingDate(instance.closingDate)
-    setContingencies(instance.contingencies)
   }
 
   const handleDeleteInstance = (id: string) => {
@@ -688,8 +889,8 @@ function App() {
           instance.id === selectedInstance
             ? {
                 ...instance,
-                mutualDate,
-                closingDate,
+                mutualDate: mutualDate!,
+                closingDate: closingDate!,
                 contingencies: newContingencies,
                 lastModified: new Date().toISOString()
               }
@@ -713,8 +914,8 @@ function App() {
           instance.id === selectedInstance
             ? {
                 ...instance,
-                mutualDate,
-                closingDate,
+                mutualDate: mutualDate!,
+                closingDate: closingDate!,
                 contingencies: newContingencies,
                 lastModified: new Date().toISOString()
               }
@@ -734,8 +935,8 @@ function App() {
           instance.id === selectedInstance
             ? {
                 ...instance,
-                mutualDate,
-                closingDate,
+                mutualDate: mutualDate!,
+                closingDate: closingDate!,
                 contingencies: newContingencies,
                 lastModified: new Date().toISOString()
               }
@@ -884,164 +1085,191 @@ function App() {
         )}
 
         <div className="container mx-auto max-w-7xl p-6 space-y-6 overflow-y-auto">
-          {/* Dates Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Timeline Settings</CardTitle>
-                {selectedInstance && (
-                  <div className="text-sm text-gray-500">
-                    Currently editing: {savedInstances.find(i => i.id === selectedInstance)?.name}
-                  </div>
-                )}
+          {!timelineActive ? (
+            // Initial blank state
+            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+              <div className="text-center space-y-4">
+                <h1 className="text-3xl font-bold text-gray-900">Real Estate Timeline</h1>
+                <p className="text-xl text-gray-600">Create a new timeline or select an existing one to get started</p>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Mutual Acceptance Date
-                  </label>
-                  <input
-                    type="date"
-                    value={mutualDate}
-                    onChange={(e) => setMutualDate(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2
-                             focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Closing Date
-                  </label>
-                  <input
-                    type="date"
-                    value={closingDate}
-                    onChange={(e) => setClosingDate(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2
-                             focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Gantt Chart */}
-          <GanttChart
-            mutualDate={mutualDate}
-            closingDate={closingDate}
-            contingencies={contingencies}
-          />
-
-          {/* Timeline Table */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Timeline</CardTitle>
-                <ActionButton
-                  onClick={() => setShowAddModal(true)}
-                  variant="primary"
+              <div className="flex gap-4">
+                <button
+                  onClick={handleNewTimeline}
+                  className="px-6 py-3 text-lg bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                 >
-                  Add Contingency
-                </ActionButton>
+                  Create New Timeline
+                </button>
+                <button
+                  onClick={() => setShowSidebar(true)}
+                  className="px-6 py-3 text-lg bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  View Saved Timelines
+                </button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <colgroup>
-                    <col className="w-[25%]" />
-                    <col className="w-[200px]" />
-                    <col className="w-[35%]" />
-                    <col className="w-[180px]" />
-                    <col className="w-[100px]" />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Event</th>
-                      <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Date</th>
-                      <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Timeline</th>
-                      <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Status</th>
-                      <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {timelineItems.map((item, index) => {
-                      const contingency = item.contingencyId
-                        ? contingencies.find(c => c.id === item.contingencyId)
-                        : null
+            </div>
+          ) : (
+            // Active timeline view - all existing components
+            <>
+              {/* Dates Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Timeline Settings</CardTitle>
+                    {selectedInstance && (
+                      <div className="text-sm text-gray-500">
+                        Currently editing: {savedInstances.find(i => i.id === selectedInstance)?.name}
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Mutual Acceptance Date
+                      </label>
+                      <input
+                        type="date"
+                        value={mutualDate!}
+                        onChange={(e) => setMutualDate(e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm
+                                 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Closing Date
+                      </label>
+                      <input
+                        type="date"
+                        value={closingDate!}
+                        onChange={(e) => setClosingDate(e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm
+                                 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                      return (
-                        <tr
-                          key={index}
-                          className={`
-                            border-b hover:bg-gray-50/50 transition-colors duration-200
-                            ${!item.isContingency ? 'font-medium' : ''}
-                          `}
-                        >
-                          <td className="p-3 whitespace-nowrap overflow-hidden text-ellipsis">
-                            <div className="flex items-center space-x-2">
-                              {item.isPossessionDate && (
-                                <span className="text-blue-500">🏠</span>
-                              )}
-                              <span>{item.name}</span>
-                            </div>
-                          </td>
-                          <td className="p-3 whitespace-nowrap">
-                            {item.date.toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex flex-col">
-                              <span>{item.method}</span>
-                              {item.notes && (
-                                <span className="text-sm text-gray-500 mt-1">
-                                  {item.notes}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-3 whitespace-nowrap">
-                            {item.isContingency && contingency && (
-                              <StatusDropdown
-                                status={contingency.status}
-                                onChange={(newStatus) => handleStatusChange(contingency.id, newStatus)}
-                              />
-                            )}
-                          </td>
-                          <td className="p-3 whitespace-nowrap">
-                            {item.isContingency && contingency && (
-                              <div className="flex items-center space-x-2">
-                                <ActionButton
-                                  onClick={() => {
-                                    setEditingContingencyId(contingency.id)
-                                    setEditingContingency(contingency)
-                                  }}
-                                  variant="secondary"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </ActionButton>
-                                <ActionButton
-                                  onClick={() => handleDeleteContingency(contingency.id)}
-                                  variant="danger"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </ActionButton>
-                              </div>
-                            )}
-                          </td>
+              {/* Gantt Chart */}
+              <GanttChart
+                mutualDate={mutualDate!}
+                closingDate={closingDate!}
+                contingencies={contingencies}
+              />
+
+              {/* Timeline Table */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Timeline</CardTitle>
+                    <ActionButton
+                      onClick={() => setShowAddModal(true)}
+                      variant="primary"
+                    >
+                      Add Contingency
+                    </ActionButton>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <colgroup>
+                        <col className="w-[25%]" />
+                        <col className="w-[200px]" />
+                        <col className="w-[35%]" />
+                        <col className="w-[180px]" />
+                        <col className="w-[100px]" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Event</th>
+                          <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Date</th>
+                          <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Timeline</th>
+                          <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Status</th>
+                          <th className="text-left p-3 font-medium text-gray-600 border-b whitespace-nowrap">Actions</th>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                      </thead>
+                      <tbody>
+                        {timelineItems.map((item, index) => {
+                          const contingency = item.contingencyId
+                            ? contingencies.find(c => c.id === item.contingencyId)
+                            : null
+
+                          return (
+                            <tr
+                              key={index}
+                              className={`
+                                border-b hover:bg-gray-50/50 transition-colors duration-200
+                                ${!item.isContingency ? 'font-medium' : ''}
+                              `}
+                            >
+                              <td className="p-3 whitespace-nowrap overflow-hidden text-ellipsis">
+                                <div className="flex items-center space-x-2">
+                                  {item.isPossessionDate && (
+                                    <span className="text-blue-500">🏠</span>
+                                  )}
+                                  <span>{item.name}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                {item.date.toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-col">
+                                  <span>{item.method}</span>
+                                  {item.notes && (
+                                    <span className="text-sm text-gray-500 mt-1">
+                                      {item.notes}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                {item.isContingency && contingency && (
+                                  <StatusDropdown
+                                    status={contingency.status}
+                                    onChange={(newStatus) => handleStatusChange(contingency.id, newStatus)}
+                                  />
+                                )}
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                {item.isContingency && contingency && (
+                                  <div className="flex items-center space-x-2">
+                                    <ActionButton
+                                      onClick={() => {
+                                        setEditingContingencyId(contingency.id)
+                                        setEditingContingency(contingency)
+                                      }}
+                                      variant="secondary"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </ActionButton>
+                                    <ActionButton
+                                      onClick={() => handleDeleteContingency(contingency.id)}
+                                      variant="danger"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </ActionButton>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </div>
 
@@ -1049,9 +1277,17 @@ function App() {
       {(showAddModal || editingContingency) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-semibold">
-              {editingContingency ? 'Edit Contingency' : 'Add Contingency'}
-            </h3>
+            {/* Header with visual distinction */}
+            <div className={`-mx-6 -mt-6 px-6 py-3 rounded-t-lg ${editingContingency ? 'bg-blue-50 border-b border-blue-200' : 'bg-green-50 border-b border-green-200'}`}>
+              <h3 className={`text-lg font-semibold ${editingContingency ? 'text-blue-700' : 'text-green-700'}`}>
+                {editingContingency ? '✏️ Edit Existing Contingency' : '➕ Add New Contingency'}
+              </h3>
+              {editingContingency && (
+                <p className="text-sm text-blue-600 mt-1">
+                  Modifying existing contingency: "{editingContingency.name}"
+                </p>
+              )}
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
