@@ -39,6 +39,15 @@ export function TimelineGantt({
   onTimelineItemsReorder,
   onContingencyClick 
 }: TimelineGanttProps) {
+
+  // Debug logging for incoming dates
+  console.log('TimelineGantt Dates:', {
+    mutualDateProp: mutualDate,
+    closingDateProp: closingDate,
+    mutualDateObj: new Date(mutualDate),
+    closingDateObj: new Date(closingDate)
+  })
+
   const today = useMemo(() => new Date(), [])
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -76,20 +85,53 @@ export function TimelineGantt({
   }
 
   // Calculate date ranges
-  const startDate = new Date(mutualDate)
-  const endDate = new Date(closingDate)
-  startDate.setDate(startDate.getDate() - 1) // Add one day before mutual
-  endDate.setDate(endDate.getDate() + 1) // Add one day after closing
-  
   const dates = useMemo(() => {
     const dateArray = []
-    const current = new Date(startDate)
-    while (current <= endDate) {
+    
+    // Create dates at noon UTC to avoid timezone issues
+    const createDate = (dateStr: string) => {
+      const date = new Date(dateStr)
+      // Set to noon UTC
+      date.setUTCHours(12, 0, 0, 0)
+      return date
+    }
+    
+    const start = createDate(mutualDate)
+    const end = createDate(closingDate)
+    
+    // Generate dates array including both start and end dates
+    const current = new Date(start)
+    while (current <= end) {
       dateArray.push(new Date(current))
       current.setDate(current.getDate() + 1)
+      current.setUTCHours(12, 0, 0, 0)
     }
+    
+    // Log the actual dates for debugging
+    console.log('Timeline Dates:', {
+      mutualDate: start.toLocaleDateString(),
+      closingDate: end.toLocaleDateString(),
+      firstDate: dateArray[0].toLocaleDateString(),
+      lastDate: dateArray[dateArray.length - 1].toLocaleDateString(),
+      totalDays: dateArray.length,
+      allDates: dateArray.map(d => d.toLocaleDateString())
+    })
+    
     return dateArray
-  }, [startDate, endDate])
+  }, [mutualDate, closingDate])
+
+  // Date comparison helper
+  const compareDate = (d1: Date, d2: Date | string) => {
+    const createDate = (d: Date | string) => {
+      const date = new Date(d)
+      date.setUTCHours(12, 0, 0, 0)
+      return date
+    }
+    
+    const date1 = createDate(d1)
+    const date2 = createDate(d2)
+    return date1.toLocaleDateString() === date2.toLocaleDateString()
+  }
 
   return (
     <Card className="w-full">
@@ -105,7 +147,7 @@ export function TimelineGantt({
               const container = document.querySelector('.overflow-x-auto')
               if (container) {
                 const todayIndex = dates.findIndex(date => 
-                  date.toDateString() === today.toDateString()
+                  compareDate(date, today)
                 )
                 if (todayIndex !== -1) {
                   const scrollOffset = Math.max(0, (todayIndex * 32) - 200)
@@ -164,9 +206,9 @@ export function TimelineGantt({
                 {/* Date Headers */}
                 <div className="flex h-8 sticky top-0 bg-white z-40">
                   {dates.map((date, index) => {
-                    const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                    const isMutualDate = date.toDateString() === new Date(mutualDate).toDateString()
-                    const isClosingDate = date.toDateString() === new Date(closingDate).toDateString()
+                    const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6
+                    const isMutualDate = compareDate(date, mutualDate)
+                    const isClosingDate = compareDate(date, closingDate)
                     const isHolidayDate = isHoliday(date)
                     
                     return (
@@ -183,7 +225,7 @@ export function TimelineGantt({
                         {isHolidayDate ? (
                           <GiPartyPopper className="w-4 h-4" />
                         ) : (
-                          date.getDate()
+                          date.getUTCDate()
                         )}
                       </div>
                     )
@@ -204,7 +246,7 @@ export function TimelineGantt({
 
                   {/* Today's Line */}
                   {dates.map((date, index) => {
-                    if (date.toDateString() === today.toDateString()) {
+                    if (compareDate(date, today)) {
                       return (
                         <div 
                           key={`today-${index}`}
@@ -238,16 +280,16 @@ export function TimelineGantt({
                                 itemName: item.name,
                                 startDate: item.startDate,
                                 endDate: item.endDate,
-                                startIndex: dates.findIndex(d => d.toDateString() === item.startDate.toDateString()),
-                                endIndex: dates.findIndex(d => d.toDateString() === item.endDate.toDateString())
+                                startIndex: dates.findIndex(d => compareDate(d, item.startDate)),
+                                endIndex: dates.findIndex(d => compareDate(d, item.endDate))
                               })}
                               {/* Horizontal connecting line */}
                               <div 
                                 className={`absolute h-[1.5px] z-0 transition-all duration-200`}
                                 style={{
-                                  left: `${dates.findIndex(d => d.toDateString() === item.startDate.toDateString()) * 32 + 16}px`,
-                                  width: `${(dates.findIndex(d => d.toDateString() === item.endDate.toDateString()) - 
-                                           dates.findIndex(d => d.toDateString() === item.startDate.toDateString())) * 32}px`,
+                                  left: `${dates.findIndex(d => compareDate(d, item.startDate)) * 32 + 16}px`,
+                                  width: `${(dates.findIndex(d => compareDate(d, item.endDate)) - 
+                                           dates.findIndex(d => compareDate(d, item.startDate))) * 32}px`,
                                   top: '50%',
                                   transform: 'translateY(-50%)',
                                   backgroundColor: item.status === 'not_started' ? '#9CA3AF' : // gray-400
@@ -265,11 +307,22 @@ export function TimelineGantt({
                           )}
                           {/* Date Markers */}
                           {dates.map((date, colIndex) => {
-                            const isStartDate = item.isContingency && item.startDate?.toDateString() === date.toDateString()
-                            const isEndDate = item.endDate?.toDateString() === date.toDateString()
-                            const isSameDay = item.startDate && item.endDate && item.startDate.toDateString() === item.endDate.toDateString()
-                            const isMutualDate = date.toDateString() === new Date(mutualDate).toDateString()
-                            const isClosingDate = date.toDateString() === new Date(closingDate).toDateString()
+                            const isStartDate = item.isContingency && item.startDate && compareDate(date, item.startDate)
+                            const isEndDate = item.endDate && compareDate(date, item.endDate)
+                            const isSameDay = item.startDate && item.endDate && compareDate(item.startDate, item.endDate)
+                            const isMutualDate = compareDate(date, mutualDate)
+                            const isClosingDate = compareDate(date, closingDate)
+
+                            // Debug logging
+                            if ((item.name === 'Mutual Acceptance' && isMutualDate) || 
+                                (item.name === 'Closing' && isClosingDate)) {
+                              console.log(`${item.name} Date Check:`, {
+                                columnDate: date.toLocaleDateString(),
+                                expectedDate: new Date(item.name === 'Mutual Acceptance' ? mutualDate : closingDate).toLocaleDateString(),
+                                matches: isMutualDate || isClosingDate
+                              })
+                            }
+
                             const statusColor = getStatusColor(item.status)
                             
                             return (
@@ -288,17 +341,10 @@ export function TimelineGantt({
                                 {/* Start date marker */}
                                 {isStartDate && !isSameDay && (
                                   <div
-                                    className={`w-3 h-3 rounded-full border-2 bg-white z-10`}
+                                    className={`absolute w-3 h-3 rounded-full z-10`}
                                     style={{
-                                      borderColor: item.status === 'not_started' ? '#9CA3AF' : // gray-400
-                                                 item.status === 'in_progress' ? '#3B82F6' : // blue-500
-                                                 item.status === 'completed' ? '#22C55E' : // green-500
-                                                 item.status === 'waived' ? '#A855F7' : // purple-500
-                                                 item.status === 'pending' ? '#EAB308' : // yellow-500
-                                                 item.status === 'scheduled' ? '#3B82F6' : // blue-500
-                                                 item.status === 'overdue' ? '#EF4444' : // red-500
-                                                 item.status === 'due_today' ? '#EAB308' : // yellow-500
-                                                 '#6B7280' // gray-500
+                                      backgroundColor: statusColor,
+                                      border: '2px solid white'
                                     }}
                                     title={`${item.name} (Start)`}
                                   />
@@ -312,17 +358,10 @@ export function TimelineGantt({
                                         onContingencyClick(contingency)
                                       }
                                     }}
-                                    className={`w-3 h-3 rounded-full border-2 bg-white z-10`}
+                                    className={`w-3 h-3 rounded-full z-10`}
                                     style={{
-                                      borderColor: item.status === 'not_started' ? '#9CA3AF' : // gray-400
-                                                 item.status === 'in_progress' ? '#3B82F6' : // blue-500
-                                                 item.status === 'completed' ? '#22C55E' : // green-500
-                                                 item.status === 'waived' ? '#A855F7' : // purple-500
-                                                 item.status === 'pending' ? '#EAB308' : // yellow-500
-                                                 item.status === 'scheduled' ? '#3B82F6' : // blue-500
-                                                 item.status === 'overdue' ? '#EF4444' : // red-500
-                                                 item.status === 'due_today' ? '#EAB308' : // yellow-500
-                                                 '#6B7280' // gray-500
+                                      backgroundColor: statusColor,
+                                      border: '2px solid white'
                                     }}
                                     title={`${item.name} (End)`}
                                   />
@@ -382,22 +421,22 @@ export function TimelineGantt({
 function getStatusColor(status: string): string {
   switch (status) {
     case 'not_started':
-      return 'border-gray-400'
+      return '#9CA3AF' // gray-400
     case 'in_progress':
-      return 'border-blue-500'
+      return '#3B82F6' // blue-500
     case 'completed':
-      return 'border-green-500'
+      return '#22C55E' // green-500
     case 'waived':
-      return 'border-purple-500'
+      return '#A855F7' // purple-500
     case 'pending':
-      return 'border-yellow-500'
+      return '#EAB308' // yellow-500
     case 'scheduled':
-      return 'border-blue-500'
+      return '#3B82F6' // blue-500
     case 'overdue':
-      return 'border-red-500'
+      return '#EF4444' // red-500
     case 'due_today':
-      return 'border-yellow-500'
+      return '#EAB308' // yellow-500
     default:
-      return 'border-gray-500'
+      return '#6B7280' // gray-500
   }
 }

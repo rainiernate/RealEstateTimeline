@@ -2,23 +2,26 @@ import { isHoliday, getHolidayName } from './holidayRules'
 
 // Helper function to check if a date is a business day
 export function isBusinessDay(date: Date): boolean {
-  const dayOfWeek = date.getDay()
-  return dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday(date)
+  const day = date.getUTCDay()
+  return day !== 0 && day !== 6 // 0 is Sunday, 6 is Saturday
 }
 
 // Helper function to get next business day
 export function getNextBusinessDay(date: Date, days: number = 1): Date {
-  let result = new Date(date)
+  const nextDay = new Date(date)
+  nextDay.setUTCHours(12, 0, 0, 0)
+  
   let daysToAdd = days
   
-  while (daysToAdd !== 0) {
-    result.setDate(result.getDate() + (daysToAdd > 0 ? 1 : -1))
-    if (isBusinessDay(result)) {
+  do {
+    nextDay.setDate(nextDay.getUTCDate() + (daysToAdd > 0 ? 1 : -1))
+    nextDay.setUTCHours(12, 0, 0, 0)
+    if (isBusinessDay(nextDay)) {
       daysToAdd += daysToAdd > 0 ? -1 : 1
     }
-  }
+  } while (daysToAdd !== 0)
   
-  return result
+  return nextDay
 }
 
 // Helper function to get previous business day
@@ -36,11 +39,11 @@ export function addBusinessDays(startDate: Date, days: number): Date {
   let currentDate = new Date(startDate)
   let businessDaysCount = 0
   
-  currentDate.setDate(currentDate.getDate())
+  currentDate.setUTCHours(0, 0, 0, 0)
   
   while (businessDaysCount < days) {
-    currentDate.setDate(currentDate.getDate() + 1)
-    currentDate.setHours(0, 0, 0, 0)
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+    currentDate.setUTCHours(0, 0, 0, 0)
     
     if (isBusinessDay(currentDate)) {
       businessDaysCount++

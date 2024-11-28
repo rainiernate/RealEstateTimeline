@@ -7,7 +7,7 @@ import { isHoliday } from '../utils/holidayRules'
 // Helper function for date calculations
 const formatDate = (dateString: string) => {
   const date = new Date(dateString)
-  date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
+  date.setUTCHours(12, 0, 0, 0)
   return date
 }
 
@@ -15,11 +15,12 @@ const addBusinessDays = (startDate: Date, days: number): Date => {
   let currentDate = new Date(startDate)
   let businessDaysCount = 0
   
-  currentDate.setDate(currentDate.getDate())
+  // Preserve noon UTC time
+  currentDate.setUTCHours(12, 0, 0, 0)
   
   while (businessDaysCount < days) {
     currentDate.setDate(currentDate.getDate() + 1)
-    currentDate.setHours(0, 0, 0, 0)
+    currentDate.setUTCHours(12, 0, 0, 0)
     
     if (isBusinessDay(currentDate)) {
       businessDaysCount++
@@ -99,8 +100,45 @@ export function useTimelineData(
           endDate = new Date(startDate.getTime() + contingency.days * 24 * 60 * 60 * 1000)
         }
       } else if (contingency.type === 'days_before_closing' && contingency.days) {
-        endDate = new Date(formatDate(closingDate).getTime() - contingency.days * 24 * 60 * 60 * 1000)
-        startDate = formatDate(mutualDate) // Start from mutual date
+        // Set end date to days before closing, using business days if <= 5 days
+        endDate = formatDate(closingDate)
+        if (contingency.days <= 5) {
+          // For timelines of 5 days or less, count backwards using business days
+          let tempDate = new Date(endDate)
+          let businessDaysCount = 0
+          
+          while (businessDaysCount < contingency.days) {
+            tempDate.setDate(tempDate.getDate() - 1)
+            tempDate.setUTCHours(12, 0, 0, 0)
+            if (isBusinessDay(tempDate)) {
+              businessDaysCount++
+            }
+          }
+          endDate = tempDate
+        } else {
+          // For longer timelines, use calendar days
+          endDate.setDate(endDate.getDate() - contingency.days)
+          endDate.setUTCHours(12, 0, 0, 0)
+        }
+        
+        // Set start date to 3 days before the end date, using same business day logic
+        const daysForTask = 3 // Default duration for closing-related tasks
+        startDate = new Date(endDate)
+        if (daysForTask <= 5) {
+          // For short durations, count backwards using business days
+          let businessDaysCount = 0
+          while (businessDaysCount < daysForTask) {
+            startDate.setDate(startDate.getDate() - 1)
+            startDate.setUTCHours(12, 0, 0, 0)
+            if (isBusinessDay(startDate)) {
+              businessDaysCount++
+            }
+          }
+        } else {
+          // For longer durations, use calendar days
+          startDate.setDate(startDate.getDate() - daysForTask)
+          startDate.setUTCHours(12, 0, 0, 0)
+        }
       } else {
         startDate = new Date()
         endDate = new Date()
