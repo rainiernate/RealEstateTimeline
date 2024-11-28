@@ -40,7 +40,9 @@ export function ContingencyForm({
     if (!days && type !== 'fixed_date' || !mutualDate || !closingDate) return null
 
     if (type === 'fixed_date') {
-      return new Date(fixedDate)
+      // For fixed dates, parse the date string directly to ensure correct date
+      const [year, month, day] = fixedDate.split('-').map(num => parseInt(num))
+      return new Date(year, month - 1, day, 12, 0, 0)
     }
 
     const daysNum = parseInt(days)
@@ -65,8 +67,8 @@ export function ContingencyForm({
       return null
     }
 
-    // Ensure we're working with midnight
-    date.setHours(0, 0, 0, 0)
+    // Ensure we're working with noon
+    date.setHours(12, 0, 0, 0)
     return date
   }, [type, days, mutualDate, closingDate, fixedDate])
 
@@ -260,19 +262,17 @@ export function ContingencyForm({
         <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
           <span className="text-sm font-medium">Target:</span>
           <div className="text-sm flex items-center gap-2">
-            {calculationType && (
-              <span className="text-blue-700">{calculationType}</span>
-            )}
-            {calculationType && formattedTargetDate && (
-              <span className="text-gray-400">•</span>
-            )}
+            <span className="text-blue-700">{calculationType}</span>
             {formattedTargetDate && (
-              <span>{formattedTargetDate.date}</span>
-            )}
-            {(formattedTargetDate?.holidayName || formattedTargetDate?.isWeekend) && (
-              <span className={`${formattedTargetDate.holidayName ? "text-amber-700" : "text-red-700"} ml-1`}>
-                ({formattedTargetDate.holidayName || 'Weekend'})
-              </span>
+              <>
+                <span className="text-gray-400">•</span>
+                <span>{formattedTargetDate.date}</span>
+                {(formattedTargetDate.holidayName || formattedTargetDate.isWeekend) && (
+                  <span className={`${formattedTargetDate.holidayName ? "text-amber-700" : "text-red-700"} ml-1`}>
+                    ({formattedTargetDate.holidayName || 'Weekend'})
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>

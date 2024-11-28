@@ -243,13 +243,22 @@ export function TimelineGantt({
                               })}
                               {/* Horizontal connecting line */}
                               <div 
-                                className={`absolute h-[2px] bg-gray-300 z-0 transition-all duration-200`}
+                                className={`absolute h-[1.5px] z-0 transition-all duration-200`}
                                 style={{
                                   left: `${dates.findIndex(d => d.toDateString() === item.startDate.toDateString()) * 32 + 16}px`,
                                   width: `${(dates.findIndex(d => d.toDateString() === item.endDate.toDateString()) - 
                                            dates.findIndex(d => d.toDateString() === item.startDate.toDateString())) * 32}px`,
                                   top: '50%',
-                                  transform: 'translateY(-50%)'
+                                  transform: 'translateY(-50%)',
+                                  backgroundColor: item.status === 'not_started' ? '#9CA3AF' : // gray-400
+                                                item.status === 'in_progress' ? '#3B82F6' : // blue-500
+                                                item.status === 'completed' ? '#22C55E' : // green-500
+                                                item.status === 'waived' ? '#A855F7' : // purple-500
+                                                item.status === 'pending' ? '#EAB308' : // yellow-500
+                                                item.status === 'scheduled' ? '#3B82F6' : // blue-500
+                                                item.status === 'overdue' ? '#EF4444' : // red-500
+                                                item.status === 'due_today' ? '#EAB308' : // yellow-500
+                                                '#6B7280' // gray-500
                                 }}
                               />
                             </>
@@ -272,14 +281,25 @@ export function TimelineGantt({
                                 {((isMutualDate && item.name === 'Mutual Acceptance') || 
                                   (isClosingDate && item.name === 'Closing')) && (
                                   <div 
-                                    className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[10px] border-transparent border-t-black z-10"
+                                    className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black z-10 mb-1"
                                     title={item.name}
                                   />
                                 )}
                                 {/* Start date marker */}
                                 {isStartDate && !isSameDay && (
                                   <div
-                                    className={`w-3 h-3 rounded-full border-2 border-gray-300 bg-white z-10`}
+                                    className={`w-3 h-3 rounded-full border-2 bg-white z-10`}
+                                    style={{
+                                      borderColor: item.status === 'not_started' ? '#9CA3AF' : // gray-400
+                                                 item.status === 'in_progress' ? '#3B82F6' : // blue-500
+                                                 item.status === 'completed' ? '#22C55E' : // green-500
+                                                 item.status === 'waived' ? '#A855F7' : // purple-500
+                                                 item.status === 'pending' ? '#EAB308' : // yellow-500
+                                                 item.status === 'scheduled' ? '#3B82F6' : // blue-500
+                                                 item.status === 'overdue' ? '#EF4444' : // red-500
+                                                 item.status === 'due_today' ? '#EAB308' : // yellow-500
+                                                 '#6B7280' // gray-500
+                                    }}
                                     title={`${item.name} (Start)`}
                                   />
                                 )}
@@ -292,14 +312,18 @@ export function TimelineGantt({
                                         onContingencyClick(contingency)
                                       }
                                     }}
-                                    className={`
-                                      w-3 h-3 rounded-full
-                                      flex items-center justify-center
-                                      transition-colors duration-200
-                                      border-2 ${statusColor.replace('bg-', 'border-')} bg-white
-                                      hover:bg-gray-50
-                                      z-10
-                                    `}
+                                    className={`w-3 h-3 rounded-full border-2 bg-white z-10`}
+                                    style={{
+                                      borderColor: item.status === 'not_started' ? '#9CA3AF' : // gray-400
+                                                 item.status === 'in_progress' ? '#3B82F6' : // blue-500
+                                                 item.status === 'completed' ? '#22C55E' : // green-500
+                                                 item.status === 'waived' ? '#A855F7' : // purple-500
+                                                 item.status === 'pending' ? '#EAB308' : // yellow-500
+                                                 item.status === 'scheduled' ? '#3B82F6' : // blue-500
+                                                 item.status === 'overdue' ? '#EF4444' : // red-500
+                                                 item.status === 'due_today' ? '#EAB308' : // yellow-500
+                                                 '#6B7280' // gray-500
+                                    }}
                                     title={`${item.name} (End)`}
                                   />
                                 )}
@@ -328,23 +352,23 @@ export function TimelineGantt({
                 <span>Key Dates</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-green-100 rounded-full" />
+                <div className="w-3 h-3 border-2 border-green-500 bg-white rounded-full" />
                 <span>Completed</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-blue-100 rounded-full" />
+                <div className="w-3 h-3 border-2 border-blue-500 bg-white rounded-full" />
                 <span>Scheduled</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-yellow-100 rounded-full" />
+                <div className="w-3 h-3 border-2 border-yellow-500 bg-white rounded-full" />
                 <span>Due Today</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-red-100 rounded-full" />
+                <div className="w-3 h-3 border-2 border-red-500 bg-white rounded-full" />
                 <span>Overdue</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-gray-50 rounded-full" />
+                <div className="w-3 h-3 border-2 border-gray-400 bg-white rounded-full" />
                 <span>Not Started</span>
               </div>
             </div>
@@ -358,22 +382,22 @@ export function TimelineGantt({
 function getStatusColor(status: string): string {
   switch (status) {
     case 'not_started':
-      return 'bg-gray-50 text-gray-500'
+      return 'border-gray-400'
     case 'in_progress':
-      return 'bg-blue-50 text-blue-700'
+      return 'border-blue-500'
     case 'completed':
-      return 'bg-green-100 text-green-700'
+      return 'border-green-500'
     case 'waived':
-      return 'bg-purple-100 text-purple-700'
+      return 'border-purple-500'
     case 'pending':
-      return 'bg-yellow-50 text-yellow-700'
+      return 'border-yellow-500'
     case 'scheduled':
-      return 'bg-blue-100 text-blue-700'
+      return 'border-blue-500'
     case 'overdue':
-      return 'bg-red-100 text-red-700'
+      return 'border-red-500'
     case 'due_today':
-      return 'bg-yellow-100 text-yellow-700'
+      return 'border-yellow-500'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'border-gray-500'
   }
 }
