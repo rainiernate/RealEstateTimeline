@@ -1,16 +1,19 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Contingency } from '../../types/timeline'
 
-export function SortableItem({ contingency }: { contingency: Contingency }) {
+interface SortableItemProps {
+  id: string
+  name: string
+}
+
+export function SortableItem({ id, name }: SortableItemProps) {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
     transition,
-    isDragging,
-  } = useSortable({ id: contingency.id })
+  } = useSortable({ id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -23,11 +26,10 @@ export function SortableItem({ contingency }: { contingency: Contingency }) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`h-8 flex items-center cursor-move select-none
-        ${isDragging ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+      className="h-8 flex items-center cursor-move group"
     >
-      <span className="text-sm truncate select-none" title={contingency.name}>
-        {contingency.name}
+      <span className="text-sm whitespace-nowrap overflow-hidden text-ellipsis group-hover:text-blue-600 transition-colors">
+        {name}
       </span>
     </div>
   )

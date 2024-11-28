@@ -1,22 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRight, Edit2, Trash2 } from 'lucide-react'
 import { GiPartyPopper } from 'react-icons/gi'
 
 // Import types
-import { Contingency } from './types/timeline'
+import { Contingency, TimelineItem } from './types/timeline'
 
 // Import components
 import { Card, CardHeader, CardTitle, CardContent } from './components/common/Card'
 import { StatusDropdown } from './components/timeline/StatusDropdown'
 import { ActionButton } from './components/common/ActionButton'
 import { TimelineGantt } from './components/timeline/TimelineGantt'
-import { TimelineTable } from './components/timeline/TimelineTable'
 import { ContingencyForm } from './components/timeline/ContingencyForm'
 
 // Import hooks
 import { useTimelineCalculations } from './hooks/useTimelineCalculations'
 import { useTimelineInstances } from './hooks/useTimelineInstances'
 import { useContingencyForm } from './hooks/useContingencyForm'
+import { useTimelineData } from './hooks/useTimelineData'
+
+// Import constants
+import { getDefaultContingencies } from './constants/defaultContingencies'
 
 function App() {
   // Primary State
@@ -24,6 +27,7 @@ function App() {
   const [closingDate, setClosingDate] = useState<string | null>(null)
   const [contingencies, setContingencies] = useState<Contingency[]>([])
   const [timelineActive, setTimelineActive] = useState(false)
+  const [showInitialSetup, setShowInitialSetup] = useState(false)
 
   // UI State
   const [showSidebar, setShowSidebar] = useState(true)
@@ -31,7 +35,17 @@ function App() {
   const [showAddModal, setShowAddModal] = useState(false)
 
   // Custom Hooks
-  const timelineItems = useTimelineCalculations(contingencies, mutualDate, closingDate)
+  const { timelineItems, handleTimelineReorder } = useTimelineData(mutualDate, closingDate, contingencies)
+  const [localTimelineItems, setLocalTimelineItems] = useState<TimelineItem[]>([])
+  useEffect(() => {
+    setLocalTimelineItems(timelineItems)
+  }, [timelineItems])
+
+  const handleLocalTimelineReorder = (reorderedItems: TimelineItem[]) => {
+    setLocalTimelineItems(reorderedItems)
+    handleTimelineReorder(reorderedItems)
+  }
+
   const {
     savedInstances,
     selectedInstance,
@@ -44,7 +58,8 @@ function App() {
     loadInstance,
     saveInstance,
     deleteInstance,
-    toggleArchiveInstance
+    toggleArchiveInstance,
+    setSavedInstances
   } = useTimelineInstances()
 
   const {
@@ -78,11 +93,29 @@ function App() {
 
   // Handle creating a new timeline
   const handleNewTimeline = () => {
-    setTimelineActive(true)
-    const newTimeline = createNewTimeline()
-    setMutualDate(newTimeline.mutualDate)
-    setClosingDate(newTimeline.closingDate)
-    setContingencies(newTimeline.contingencies)
+    setShowInitialSetup(true)
+    setTimelineActive(false)
+    setMutualDate(null)
+    setClosingDate(null)
+    setContingencies([])
+    setInstanceName('')
+    createNewTimeline()
+  }
+
+  // Handle initial date setup
+  const handleInitialSetup = () => {
+    if (mutualDate && closingDate && instanceName) {
+      // Add default contingencies
+      const defaultContingencies = getDefaultContingencies(mutualDate, closingDate)
+      setContingencies(defaultContingencies)
+      
+      // Activate timeline
+      setTimelineActive(true)
+      setShowInitialSetup(false)
+      
+      // Save the new instance immediately
+      saveInstance(mutualDate, closingDate, defaultContingencies)
+    }
   }
 
   // Handle loading an instance
@@ -91,7 +124,7 @@ function App() {
     setMutualDate(instance.mutualDate)
     setClosingDate(instance.closingDate)
     setContingencies(instance.contingencies)
-    loadInstance(instance.id)
+    loadInstance(instance)
   }
 
   // Handle saving an instance
@@ -117,10 +150,12 @@ function App() {
 
   const handleUpdateContingency = (updatedContingency: Contingency) => {
     const newContingencies = contingencies.map(c =>
-      c.id === updatedContingency.id ? updatedContingency : c
+      c.id === updatedContingency.id ? {
+        ...updatedContingency,
+        order: c.order // Preserve the original order
+      } : c
     )
     setContingencies(newContingencies)
-    setEditingContingency(null)
 
     if (selectedInstance && mutualDate && closingDate) {
       saveInstance(mutualDate, closingDate, newContingencies)
@@ -216,29 +251,73 @@ function App() {
         )}
 
         <div className="container mx-auto max-w-7xl p-6 space-y-6 overflow-y-auto">
-          {!timelineActive ? (
-            // Initial blank state
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+          {!timelineActive && !showInitialSetup && (
+            <div className="h-full flex items-center justify-center">
               <div className="text-center space-y-4">
-                <h1 className="text-3xl font-bold text-gray-900">Real Estate Timeline</h1>
-                <p className="text-xl text-gray-600">Create a new timeline or select an existing one to get started</p>
-              </div>
-              <div className="flex gap-4">
-                <button
-                  onClick={handleNewTimeline}
-                  className="px-6 py-3 text-lg bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  Create New Timeline
-                </button>
-                <button
-                  onClick={() => setShowSidebar(true)}
-                  className="px-6 py-3 text-lg bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  View Saved Timelines
-                </button>
+                <h1 className="text-2xl font-bold text-gray-900">Welcome to Timeline Manager</h1>
+                <p className="text-gray-600">Create a new timeline or load an existing one to get started.</p>
+                <div className="flex justify-center gap-4">
+                  <ActionButton onClick={handleNewTimeline}>Create New Timeline</ActionButton>
+                  <ActionButton onClick={() => setShowArchived(!showArchived)}>
+                    {showArchived ? 'Hide Archived' : 'Show Archived'}
+                  </ActionButton>
+                </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {showInitialSetup && (
+            <div className="max-w-md mx-auto mt-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create New Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Timeline Name</label>
+                      <input
+                        type="text"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        value={instanceName}
+                        onChange={(e) => setInstanceName(e.target.value)}
+                        placeholder="Enter timeline name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Mutual Acceptance Date</label>
+                      <input
+                        type="date"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        value={mutualDate || ''}
+                        onChange={(e) => setMutualDate(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Closing Date</label>
+                      <input
+                        type="date"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        value={closingDate || ''}
+                        onChange={(e) => setClosingDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="pt-4">
+                      <ActionButton
+                        onClick={handleInitialSetup}
+                        disabled={!mutualDate || !closingDate || !instanceName}
+                        className="w-full"
+                      >
+                        Continue
+                      </ActionButton>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {timelineActive && (
             // Active timeline view
             <>
               {/* Timeline Settings */}
@@ -246,36 +325,74 @@ function App() {
                 <CardHeader>
                   <div className="flex justify-between items-center">
                     <CardTitle>Timeline Settings</CardTitle>
-                    {selectedInstance && (
-                      <div className="text-sm text-gray-500">
-                        Currently editing: {savedInstances.find(i => i.id === selectedInstance)?.name}
-                      </div>
-                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
+                    {/* Timeline Name */}
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
-                        Mutual Acceptance Date
+                        Timeline Name
                       </label>
                       <input
-                        type="date"
-                        value={mutualDate || ''}
-                        onChange={(e) => setMutualDate(e.target.value)}
+                        type="text"
+                        value={instanceName}
+                        onChange={(e) => setInstanceName(e.target.value)}
+                        placeholder="Enter timeline name"
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Closing Date
-                      </label>
-                      <input
-                        type="date"
-                        value={closingDate || ''}
-                        onChange={(e) => setClosingDate(e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+
+                    {/* Dates Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Mutual Acceptance Date
+                        </label>
+                        <input
+                          type="date"
+                          value={mutualDate || ''}
+                          onChange={(e) => setMutualDate(e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="text-sm text-gray-500">
+                          {mutualDate && new Date(mutualDate).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Closing Date
+                        </label>
+                        <input
+                          type="date"
+                          value={closingDate || ''}
+                          onChange={(e) => setClosingDate(e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="text-sm text-gray-500">
+                          {closingDate && new Date(closingDate).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Timeline Duration
+                        </label>
+                        <div className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50">
+                          {mutualDate && closingDate && (
+                            <span className="font-medium">
+                              {Math.round((new Date(closingDate).getTime() - new Date(mutualDate).getTime()) / (1000 * 60 * 60 * 24))} days
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -285,44 +402,20 @@ function App() {
               {mutualDate && closingDate && (
                 <>
                   {/* Timeline Gantt */}
-                  <TimelineGantt
-                    timelineItems={timelineItems}
-                    mutualDate={mutualDate}
-                    closingDate={closingDate}
-                    onContingencyClick={(contingency) => {
-                      setEditingContingency(contingency)
-                      setShowAddModal(true)
-                    }}
-                  />
-
-                  {/* Timeline Table */}
-                  <Card>
-                    <CardHeader>
-                      <div className="flex justify-between items-center">
-                        <CardTitle>Timeline Items</CardTitle>
-                        <ActionButton
-                          onClick={() => {
-                            setEditingContingency(null)
-                            setShowAddModal(true)
-                          }}
-                          variant="primary"
-                        >
-                          Add Contingency
-                        </ActionButton>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <TimelineTable
-                        timelineItems={timelineItems}
-                        onEditContingency={(contingency) => {
-                          setEditingContingency(contingency)
-                          setShowAddModal(true)
-                        }}
-                        onDeleteContingency={handleDeleteContingency}
-                        onUpdateContingency={handleUpdateContingency}
-                      />
-                    </CardContent>
-                  </Card>
+                  <div className="flex-1 min-w-0">
+                    <TimelineGantt
+                      timelineItems={localTimelineItems}
+                      mutualDate={mutualDate || ''}
+                      closingDate={closingDate || ''}
+                      contingencies={contingencies}
+                      onContingencyReorder={handleContingencyReorder}
+                      onTimelineItemsReorder={handleLocalTimelineReorder}
+                      onContingencyClick={(contingency) => {
+                        setEditingContingency(contingency)
+                        setShowAddModal(true)
+                      }}
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -331,15 +424,33 @@ function App() {
       </div>
 
       {/* Add/Edit Contingency Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-lg font-semibold mb-4">Add Contingency</h2>
+      {(showAddModal || editingContingency) && (
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">
+              {editingContingency ? 'Edit Contingency' : 'Add Contingency'}
+            </h2>
             <ContingencyForm
-              onSave={handleContingencySubmit}
-              onCancel={() => setShowAddModal(false)}
               mutualDate={mutualDate!}
               closingDate={closingDate!}
+              initialValues={editingContingency || undefined}
+              onSubmit={(contingency) => {
+                if (editingContingency) {
+                  handleUpdateContingency({
+                    ...contingency,
+                    id: editingContingency.id,
+                    status: editingContingency.status // Preserve the status
+                  })
+                } else {
+                  handleAddContingency(contingency)
+                }
+                setShowAddModal(false)
+                setEditingContingency(null)
+              }}
+              onCancel={() => {
+                setShowAddModal(false)
+                setEditingContingency(null)
+              }}
             />
           </div>
         </div>

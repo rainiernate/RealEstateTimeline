@@ -4,13 +4,33 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
   return [
     {
       id: crypto.randomUUID(),
+      name: "Earnest Money",
+      type: "days_from_mutual",
+      days: 3,
+      description: "Earnest money deposit due",
+      isPossessionDate: false,
+      status: 'not_started',
+      order: 1
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Seller Disclosure",
+      type: "days_from_mutual",
+      days: 3,
+      description: "Seller to provide disclosure statement",
+      isPossessionDate: false,
+      status: 'not_started',
+      order: 2
+    },
+    {
+      id: crypto.randomUUID(),
       name: "Title Review Period",
       type: "days_from_mutual",
       days: 5,
       description: "Review title report and raise any objections",
       isPossessionDate: false,
       status: 'not_started',
-      order: 1
+      order: 3
     },
     {
       id: crypto.randomUUID(),
@@ -20,7 +40,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "Period to complete property inspection and review findings",
       isPossessionDate: false,
       status: 'not_started',
-      order: 2
+      order: 4
     },
     {
       id: crypto.randomUUID(),
@@ -30,7 +50,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "Period to secure financing approval and complete underwriting",
       isPossessionDate: false,
       status: 'not_started',
-      order: 3
+      order: 5
     },
     {
       id: crypto.randomUUID(),
@@ -40,7 +60,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "Period to verify all transaction information",
       isPossessionDate: false,
       status: 'not_started',
-      order: 4
+      order: 6
     },
     {
       id: crypto.randomUUID(),
@@ -50,7 +70,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "All funds must be received by escrow",
       isPossessionDate: false,
       status: 'not_started',
-      order: 5
+      order: 7
     }
   ]
 }

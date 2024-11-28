@@ -16,9 +16,9 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { SortableItem } from './SortableItem'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../common/Card'
 import { ActionButton } from '../common/ActionButton'
+import { SortableItem } from './SortableItem'
 
 interface TimelineGanttProps {
   timelineItems: TimelineItem[]
@@ -26,6 +26,7 @@ interface TimelineGanttProps {
   closingDate: string
   contingencies: Contingency[]
   onContingencyReorder: (reorderedContingencies: Contingency[]) => void
+  onTimelineItemsReorder: (reorderedItems: TimelineItem[]) => void
   onContingencyClick: (contingency: Contingency) => void
 }
 
@@ -35,6 +36,7 @@ export function TimelineGantt({
   closingDate = '',
   contingencies = [],
   onContingencyReorder,
+  onTimelineItemsReorder,
   onContingencyClick 
 }: TimelineGanttProps) {
   const today = useMemo(() => new Date(), [])
@@ -44,6 +46,34 @@ export function TimelineGantt({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   )
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event
+    if (!active || !over || active.id === over.id) return
+
+    const oldIndex = parseInt(active.id.split('-')[1])
+    const newIndex = parseInt(over.id.split('-')[1])
+    
+    // Filter out Mutual Acceptance and Closing
+    const draggableItems = timelineItems.filter(
+      item => item.name !== 'Mutual Acceptance' && item.name !== 'Closing'
+    )
+    
+    // Reorder the draggable items
+    const reorderedDraggable = arrayMove(draggableItems, oldIndex, newIndex)
+    
+    // Reconstruct the full timeline items array with updated order
+    const newTimelineItems = [
+      timelineItems[0], // Mutual Acceptance
+      ...reorderedDraggable.map((item, index) => ({
+        ...item,
+        order: index + 1 // Start after Mutual Acceptance
+      })),
+      timelineItems[timelineItems.length - 1] // Closing
+    ]
+    
+    onTimelineItemsReorder(newTimelineItems)
+  }
 
   // Calculate date ranges
   const startDate = new Date(mutualDate)
@@ -60,16 +90,6 @@ export function TimelineGantt({
     }
     return dateArray
   }, [startDate, endDate])
-
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event
-    if (active.id !== over.id) {
-      const oldIndex = contingencies.findIndex(item => item.id === active.id)
-      const newIndex = contingencies.findIndex(item => item.id === over.id)
-      const newItems = arrayMove(contingencies, oldIndex, newIndex)
-      onContingencyReorder(newItems)
-    }
-  }
 
   return (
     <Card className="w-full">
@@ -102,41 +122,47 @@ export function TimelineGantt({
         <div className="mt-4 relative">
           <div className="overflow-x-auto">
             {/* Grid Layout */}
-            <div className="grid grid-cols-[200px_1fr] min-w-full">
+            <div className="grid grid-cols-[200px_1fr] min-w-full relative">
               {/* Left Column - Event Names */}
-              <div className="border-r pr-4 bg-white sticky left-0 z-10">
+              <div className="border-r pr-4 bg-white sticky left-0 z-50">
                 <div className="h-8 flex items-center">
-                  <span className="text-sm font-semibold">Event</span>
+                  <span className="text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Event</span>
                 </div>
                 {/* Mutual Date */}
                 <div className="h-8 flex items-center">
-                  <span className="text-sm font-bold text-black">Mutual Acceptance</span>
+                  <span className="text-sm font-bold text-black whitespace-nowrap overflow-hidden text-ellipsis">Mutual Acceptance</span>
                 </div>
                 {/* Contingency Titles */}
-                <DndContext
-                  sensors={sensors}
+                <DndContext 
+                  sensors={sensors} 
                   collisionDetection={closestCenter}
                   onDragEnd={handleDragEnd}
                 >
-                  <SortableContext
-                    items={contingencies.map(item => item.id)}
+                  <SortableContext 
+                    items={timelineItems.map((_, index) => `item-${index}`)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {contingencies.map((contingency) => (
-                      <SortableItem key={contingency.id} contingency={contingency} />
+                    {timelineItems
+                      .filter(item => item.name !== 'Mutual Acceptance' && item.name !== 'Closing')
+                      .map((item, index) => (
+                        <SortableItem 
+                          key={`item-${index}`}
+                          id={`item-${index}`}
+                          name={item.name}
+                        />
                     ))}
                   </SortableContext>
                 </DndContext>
                 {/* Closing Date */}
                 <div className="h-8 flex items-center">
-                  <span className="text-sm font-bold text-black">Closing Date</span>
+                  <span className="text-sm font-bold text-black whitespace-nowrap overflow-hidden text-ellipsis">Closing Date</span>
                 </div>
               </div>
 
               {/* Right Column - Timeline Grid */}
               <div className="relative">
                 {/* Date Headers */}
-                <div className="flex h-8">
+                <div className="flex h-8 sticky top-0 bg-white z-40">
                   {dates.map((date, index) => {
                     const isWeekend = date.getDay() === 0 || date.getDay() === 6
                     const isMutualDate = date.toDateString() === new Date(mutualDate).toDateString()
@@ -165,7 +191,7 @@ export function TimelineGantt({
                 </div>
 
                 {/* Timeline Grid */}
-                <div className="relative">
+                <div className="relative z-30">
                   {/* Vertical Grid Lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
                     {dates.map((_, index) => (
@@ -191,37 +217,106 @@ export function TimelineGantt({
                   })}
 
                   {/* Timeline Items */}
-                  {timelineItems.map((item, rowIndex) => (
-                    <div key={rowIndex} className="h-8 flex items-center relative">
-                      {dates.map((date, colIndex) => {
-                        const isItemDate = item.date.toDateString() === date.toDateString()
-                        const statusColor = getStatusColor(item.status)
-                        
-                        return (
-                          <div 
-                            key={colIndex}
-                            className="w-8 flex-shrink-0 relative h-full flex items-center justify-center"
-                          >
-                            {isItemDate && item.isContingency && (
-                              <button
-                                onClick={() => onContingencyClick(item as Contingency)}
-                                className={`
-                                  w-6 h-6 rounded-full ${statusColor}
-                                  flex items-center justify-center
-                                  transition-colors duration-200
-                                `}
+                  <DndContext 
+                    sensors={sensors} 
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext 
+                      items={contingencies.map(c => c.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {timelineItems.map((item, rowIndex) => (
+                        <div key={rowIndex} className={`
+                          h-8 flex items-center relative
+                          ${item.isContingency ? 'cursor-move hover:bg-gray-50/50' : ''}
+                        `}>
+                          {/* Timeline Bar */}
+                          {item.isContingency && item.startDate && item.endDate && (
+                            <>
+                              {console.log('Rendering Timeline Bar:', {
+                                itemName: item.name,
+                                startDate: item.startDate,
+                                endDate: item.endDate,
+                                startIndex: dates.findIndex(d => d.toDateString() === item.startDate.toDateString()),
+                                endIndex: dates.findIndex(d => d.toDateString() === item.endDate.toDateString())
+                              })}
+                              {/* Horizontal connecting line */}
+                              <div 
+                                className={`absolute h-[2px] bg-gray-300 z-0 transition-all duration-200`}
+                                style={{
+                                  left: `${dates.findIndex(d => d.toDateString() === item.startDate.toDateString()) * 32 + 16}px`,
+                                  width: `${(dates.findIndex(d => d.toDateString() === item.endDate.toDateString()) - 
+                                           dates.findIndex(d => d.toDateString() === item.startDate.toDateString())) * 32}px`,
+                                  top: '50%',
+                                  transform: 'translateY(-50%)'
+                                }}
+                              />
+                            </>
+                          )}
+                          {/* Date Markers */}
+                          {dates.map((date, colIndex) => {
+                            const isStartDate = item.isContingency && item.startDate?.toDateString() === date.toDateString()
+                            const isEndDate = item.endDate?.toDateString() === date.toDateString()
+                            const isSameDay = item.startDate && item.endDate && item.startDate.toDateString() === item.endDate.toDateString()
+                            const isMutualDate = date.toDateString() === new Date(mutualDate).toDateString()
+                            const isClosingDate = date.toDateString() === new Date(closingDate).toDateString()
+                            const statusColor = getStatusColor(item.status)
+                            
+                            return (
+                              <div 
+                                key={colIndex}
+                                className="w-8 flex-shrink-0 relative h-full flex items-center justify-center"
                               >
-                                <div className="w-2 h-2 bg-white rounded-full" />
-                              </button>
-                            )}
-                            {isItemDate && !item.isContingency && (
-                              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black" />
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                                {/* Mutual/Closing marker */}
+                                {((isMutualDate && item.name === 'Mutual Acceptance') || 
+                                  (isClosingDate && item.name === 'Closing')) && (
+                                  <div 
+                                    className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[10px] border-transparent border-t-black z-10"
+                                    title={item.name}
+                                  />
+                                )}
+                                {/* Start date marker */}
+                                {isStartDate && !isSameDay && (
+                                  <div
+                                    className={`w-3 h-3 rounded-full border-2 border-gray-300 bg-white z-10`}
+                                    title={`${item.name} (Start)`}
+                                  />
+                                )}
+                                {/* End date marker */}
+                                {isEndDate && item.isContingency && (
+                                  <button
+                                    onClick={() => {
+                                      const contingency = contingencies.find(c => c.id === item.contingencyId)
+                                      if (contingency) {
+                                        onContingencyClick(contingency)
+                                      }
+                                    }}
+                                    className={`
+                                      w-3 h-3 rounded-full
+                                      flex items-center justify-center
+                                      transition-colors duration-200
+                                      border-2 ${statusColor.replace('bg-', 'border-')} bg-white
+                                      hover:bg-gray-50
+                                      z-10
+                                    `}
+                                    title={`${item.name} (End)`}
+                                  />
+                                )}
+                                {/* Mutual/Closing marker */}
+                                {isEndDate && !item.isContingency && (
+                                  <div 
+                                    className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black z-10"
+                                    title={item.name}
+                                  />
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </div>
               </div>
             </div>
@@ -229,7 +324,7 @@ export function TimelineGantt({
             {/* Legend */}
             <div className="flex gap-4 text-sm mt-4">
               <div className="flex items-center gap-1">
-                <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-black" />
+                <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[10px] border-transparent border-t-black" />
                 <span>Key Dates</span>
               </div>
               <div className="flex items-center gap-1">

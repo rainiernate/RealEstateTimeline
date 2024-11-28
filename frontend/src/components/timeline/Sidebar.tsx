@@ -11,6 +11,8 @@ interface SidebarProps {
   onLoadInstance: (instance: SavedInstance) => void
   onDeleteInstance: (instanceId: string) => void
   onAddContingency: (contingency: Contingency) => void
+  mutualDate: string
+  closingDate: string
 }
 
 export function Sidebar({
@@ -19,7 +21,9 @@ export function Sidebar({
   onSaveInstance,
   onLoadInstance,
   onDeleteInstance,
-  onAddContingency
+  onAddContingency,
+  mutualDate,
+  closingDate
 }: SidebarProps) {
   const [showNewContingencyForm, setShowNewContingencyForm] = useState(false)
 
@@ -85,11 +89,13 @@ export function Sidebar({
             {showNewContingencyForm && (
               <div className="mt-4">
                 <ContingencyForm
-                  onSave={(contingency) => {
+                  onSubmit={(contingency) => {
                     onAddContingency(contingency)
                     setShowNewContingencyForm(false)
                   }}
                   onCancel={() => setShowNewContingencyForm(false)}
+                  mutualDate={mutualDate}
+                  closingDate={closingDate}
                 />
               </div>
             )}

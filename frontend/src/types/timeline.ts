@@ -25,6 +25,8 @@ export interface Contingency {
 export interface TimelineItem {
   name: string
   date: Date
+  startDate: Date
+  endDate: Date
   daysFromMutual: number
   method: string
   notes: string

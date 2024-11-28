@@ -34,6 +34,9 @@ export function isHoliday(date: Date): boolean {
   // Thanksgiving Day (4th Thursday in November)
   if (month === 10 && dayOfWeek === 4 && day >= 22 && day <= 28) return true
 
+  // Native American Heritage Day (Day after Thanksgiving)
+  if (month === 10 && dayOfWeek === 5 && day >= 23 && day <= 29) return true
+
   // Christmas Day (December 25)
   if (month === 11 && day === 25) return true
 
@@ -56,6 +59,7 @@ export function getHolidayName(date: Date): string {
   if (month === 9 && dayOfWeek === 1 && day >= 8 && day <= 14) return "Indigenous Peoples' Day"
   if (month === 10 && day === 11) return "Veterans Day"
   if (month === 10 && dayOfWeek === 4 && day >= 22 && day <= 28) return "Thanksgiving Day"
+  if (month === 10 && dayOfWeek === 5 && day >= 23 && day <= 29) return "Native American Heritage Day"
   if (month === 11 && day === 25) return "Christmas Day"
 
   return ""

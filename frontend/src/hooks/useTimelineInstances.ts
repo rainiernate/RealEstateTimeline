@@ -96,7 +96,7 @@ export function useTimelineInstances() {
   const saveInstance = (mutualDate: string, closingDate: string, contingencies: Contingency[]) => {
     if (!instanceName.trim()) return
 
-    if (isCreatingNew) {
+    if (isCreatingNew || !selectedInstance) {
       const newInstance: SavedInstance = {
         id: crypto.randomUUID(),
         name: instanceName,
@@ -109,7 +109,7 @@ export function useTimelineInstances() {
       setSavedInstances(prev => [...prev, newInstance])
       setSelectedInstance(newInstance.id)
       setIsCreatingNew(false)
-    } else if (selectedInstance) {
+    } else {
       setSavedInstances(prev =>
         prev.map(instance =>
           instance.id === selectedInstance
@@ -119,7 +119,6 @@ export function useTimelineInstances() {
                 mutualDate,
                 closingDate,
                 contingencies,
-                lastModified: new Date().toISOString()
               }
             : instance
         )
@@ -144,18 +143,32 @@ export function useTimelineInstances() {
     )
   }
 
+  const updateInstanceName = (newName: string) => {
+    setInstanceName(newName)
+    if (selectedInstance) {
+      setSavedInstances(prev =>
+        prev.map(instance =>
+          instance.id === selectedInstance
+            ? { ...instance, name: newName }
+            : instance
+        )
+      )
+    }
+  }
+
   return {
     savedInstances: filteredInstances,
     selectedInstance,
     instanceName,
     showArchived,
     isCreatingNew,
-    setInstanceName,
+    setInstanceName: updateInstanceName,
     setShowArchived,
     createNewTimeline,
     loadInstance,
     saveInstance,
     deleteInstance,
-    toggleArchiveInstance
+    toggleArchiveInstance,
+    setSavedInstances
   }
 }
