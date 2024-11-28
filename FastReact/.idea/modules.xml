@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/RealEstateTools.iml" filepath="$PROJECT_DIR$/.idea/RealEstateTools.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/FastReactTimeline.iml" filepath="$PROJECT_DIR$/.idea/FastReactTimeline.iml" />
     </modules>
   </component>
 </project>
