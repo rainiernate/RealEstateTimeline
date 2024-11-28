@@ -11,6 +11,7 @@ import { StatusDropdown } from './components/timeline/StatusDropdown'
 import { ActionButton } from './components/common/ActionButton'
 import { TimelineGantt } from './components/timeline/TimelineGantt'
 import { ContingencyForm } from './components/timeline/ContingencyForm'
+import { MilestoneTable } from './components/timeline/MilestoneTable'
 
 // Import hooks
 import { useTimelineCalculations } from './hooks/useTimelineCalculations'
@@ -176,6 +177,11 @@ function App() {
     if (selectedInstance && mutualDate && closingDate) {
       saveInstance(mutualDate, closingDate, reorderedContingencies)
     }
+  }
+
+  const handleEditContingency = (contingency: Contingency) => {
+    setEditingContingency(contingency)
+    setShowAddModal(true)
   }
 
   return (
@@ -410,8 +416,20 @@ function App() {
                       contingencies={contingencies}
                       onContingencyReorder={handleContingencyReorder}
                       onTimelineItemsReorder={handleLocalTimelineReorder}
-                      onContingencyClick={(contingency) => {
-                        setEditingContingency(contingency)
+                      onContingencyClick={handleEditContingency}
+                    />
+                  </div>
+
+                  {/* Milestone Table */}
+                  <div className="mt-8">
+                    <MilestoneTable
+                      timelineItems={localTimelineItems}
+                      contingencies={contingencies}
+                      onEditContingency={handleEditContingency}
+                      onDeleteContingency={handleDeleteContingency}
+                      onUpdateContingency={handleUpdateContingency}
+                      onAddContingency={() => {
+                        setEditingContingency(null)
                         setShowAddModal(true)
                       }}
                     />
