@@ -10,6 +10,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "Earnest money deposit due",
       isPossessionDate: false,
       status: 'not_started',
+      useBusinessDays: true,
       order: 1
     },
     {
@@ -20,6 +21,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "Seller to provide disclosure statement",
       isPossessionDate: false,
       status: 'not_started',
+      useBusinessDays: true,
       order: 2
     },
     {
@@ -30,6 +32,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "Review title report and raise any objections",
       isPossessionDate: false,
       status: 'not_started',
+      useBusinessDays: true,
       order: 3
     },
     {
@@ -70,6 +73,7 @@ export function getDefaultContingencies(_mutualDate: string, _closingDate: strin
       description: "All funds must be received by escrow",
       isPossessionDate: false,
       status: 'not_started',
+      useBusinessDays: true,
       order: 7
     }
   ]

@@ -92,17 +92,32 @@ export function useTimelineData(
         endDate = startDate // For fixed dates, start and end are the same
       } else if (contingency.type === 'days_from_mutual' && contingency.days) {
         startDate = formatDate(mutualDate)
-        if (contingency.days <= 5) {
-          // For timelines of 5 days or less, count business days
-          endDate = addBusinessDays(startDate, contingency.days)
+        if (contingency.days <= 5 || contingency.useBusinessDays) {
+          // For timelines of 5 days or less, count using business days
+          let tempDate = new Date(startDate)
+          let businessDaysCount = 0
+          
+          while (businessDaysCount < contingency.days) {
+            tempDate.setDate(tempDate.getDate() + 1)
+            tempDate.setUTCHours(12, 0, 0, 0)
+            if (isBusinessDay(tempDate) && !isHoliday(tempDate)) {
+              businessDaysCount++
+            }
+          }
+          endDate = tempDate
         } else {
           // For longer timelines, use calendar days
-          endDate = new Date(startDate.getTime() + contingency.days * 24 * 60 * 60 * 1000)
+          endDate = new Date(startDate)
+          endDate.setDate(endDate.getDate() + contingency.days)
+          endDate.setUTCHours(12, 0, 0, 0)
         }
       } else if (contingency.type === 'days_before_closing' && contingency.days) {
-        // Set end date to days before closing, using business days if <= 5 days
-        endDate = formatDate(closingDate)
-        if (contingency.days <= 5) {
+        // Start from the day before closing
+        endDate = new Date(formatDate(closingDate))
+        endDate.setDate(endDate.getDate() - 1)
+        endDate.setUTCHours(12, 0, 0, 0)
+
+        if (contingency.days <= 5 || contingency.useBusinessDays) {
           // For timelines of 5 days or less, count backwards using business days
           let tempDate = new Date(endDate)
           let businessDaysCount = 0
@@ -110,33 +125,15 @@ export function useTimelineData(
           while (businessDaysCount < contingency.days) {
             tempDate.setDate(tempDate.getDate() - 1)
             tempDate.setUTCHours(12, 0, 0, 0)
-            if (isBusinessDay(tempDate)) {
+            if (isBusinessDay(tempDate) && !isHoliday(tempDate)) {
               businessDaysCount++
             }
           }
-          endDate = tempDate
+          startDate = tempDate
         } else {
           // For longer timelines, use calendar days
-          endDate.setDate(endDate.getDate() - contingency.days)
-          endDate.setUTCHours(12, 0, 0, 0)
-        }
-        
-        // Set start date to 3 days before the end date, using same business day logic
-        const daysForTask = 3 // Default duration for closing-related tasks
-        startDate = new Date(endDate)
-        if (daysForTask <= 5) {
-          // For short durations, count backwards using business days
-          let businessDaysCount = 0
-          while (businessDaysCount < daysForTask) {
-            startDate.setDate(startDate.getDate() - 1)
-            startDate.setUTCHours(12, 0, 0, 0)
-            if (isBusinessDay(startDate)) {
-              businessDaysCount++
-            }
-          }
-        } else {
-          // For longer durations, use calendar days
-          startDate.setDate(startDate.getDate() - daysForTask)
+          startDate = new Date(endDate)
+          startDate.setDate(startDate.getDate() - contingency.days)
           startDate.setUTCHours(12, 0, 0, 0)
         }
       } else {
@@ -153,7 +150,7 @@ export function useTimelineData(
         method: contingency.type === 'fixed_date'
           ? 'Fixed Date'
           : contingency.type === 'days_from_mutual'
-            ? `${contingency.days} ${contingency.days <= 5 ? 'business' : ''} days from mutual`
+            ? `${contingency.days} ${contingency.days <= 5 || contingency.useBusinessDays ? 'business' : ''} days from mutual`
             : `${contingency.days} days before closing`,
         notes: contingency.description || '',
         isContingency: true,

@@ -30,6 +30,15 @@ function App() {
   const [timelineActive, setTimelineActive] = useState(false)
   const [showInitialSetup, setShowInitialSetup] = useState(false)
 
+  // Debug logging for date changes
+  useEffect(() => {
+    console.log('App Date State:', {
+      mutualDate,
+      closingDate,
+      timelineActive
+    })
+  }, [mutualDate, closingDate, timelineActive])
+
   // UI State
   const [showSidebar, setShowSidebar] = useState(true)
   const [editingContingency, setEditingContingency] = useState<Contingency | null>(null)
@@ -106,6 +115,13 @@ function App() {
   // Handle initial date setup
   const handleInitialSetup = () => {
     if (mutualDate && closingDate && instanceName) {
+      console.log('Timeline Activation:', {
+        mutualDate,
+        closingDate,
+        parsedMutual: new Date(mutualDate).toISOString(),
+        parsedClosing: new Date(closingDate).toISOString()
+      })
+      
       // Add default contingencies
       const defaultContingencies = getDefaultContingencies(mutualDate, closingDate)
       setContingencies(defaultContingencies)
@@ -121,6 +137,12 @@ function App() {
 
   // Handle loading an instance
   const handleLoadInstance = (instance: any) => {
+    console.log('Loading Instance:', {
+      instanceMutualDate: instance.mutualDate,
+      instanceClosingDate: instance.closingDate,
+      currentMutualDate: mutualDate,
+      currentClosingDate: closingDate
+    })
     setTimelineActive(true)
     setMutualDate(instance.mutualDate)
     setClosingDate(instance.closingDate)
@@ -296,7 +318,10 @@ function App() {
                         type="date"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={mutualDate || ''}
-                        onChange={(e) => setMutualDate(e.target.value)}
+                        onChange={(e) => {
+                          console.log('Setting Mutual Date:', e.target.value)
+                          setMutualDate(e.target.value)
+                        }}
                       />
                     </div>
                     <div>
@@ -305,7 +330,10 @@ function App() {
                         type="date"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={closingDate || ''}
-                        onChange={(e) => setClosingDate(e.target.value)}
+                        onChange={(e) => {
+                          console.log('Setting Closing Date:', e.target.value)
+                          setClosingDate(e.target.value)
+                        }}
                       />
                     </div>
                     <div className="pt-4">
@@ -358,7 +386,10 @@ function App() {
                         <input
                           type="date"
                           value={mutualDate || ''}
-                          onChange={(e) => setMutualDate(e.target.value)}
+                          onChange={(e) => {
+                            console.log('Setting Mutual Date:', e.target.value)
+                            setMutualDate(e.target.value)
+                          }}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <div className="text-sm text-gray-500">
@@ -376,7 +407,10 @@ function App() {
                         <input
                           type="date"
                           value={closingDate || ''}
-                          onChange={(e) => setClosingDate(e.target.value)}
+                          onChange={(e) => {
+                            console.log('Setting Closing Date:', e.target.value)
+                            setClosingDate(e.target.value)
+                          }}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <div className="text-sm text-gray-500">

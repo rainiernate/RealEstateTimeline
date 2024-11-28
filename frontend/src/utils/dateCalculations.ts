@@ -1,7 +1,6 @@
 // Helper function to get date from string
 export function parseDate(dateString: string): Date {
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
+  const date = new Date(dateString)
   date.setHours(0, 0, 0, 0)
   return date
 }
@@ -19,14 +18,19 @@ export function daysBetween(start: Date, end: Date): number {
 // Helper function to get all dates between start and end
 export function getDatesBetween(start: Date, end: Date): Date[] {
   const dates: Date[] = []
-  const startDate = new Date(start)
-  startDate.setHours(0, 0, 0, 0)
+  const currentDate = new Date(start)
   const endDate = new Date(end)
+  
+  // Set both dates to midnight
+  currentDate.setHours(0, 0, 0, 0)
   endDate.setHours(0, 0, 0, 0)
 
-  while (startDate <= endDate) {
-    dates.push(new Date(startDate))
-    startDate.setDate(startDate.getDate() + 1)
+  // Add dates until we reach or exceed the end date
+  while (currentDate.getTime() <= endDate.getTime()) {
+    dates.push(new Date(currentDate)) // Create new Date object for each day
+    currentDate.setDate(currentDate.getDate() + 1)
+    currentDate.setHours(0, 0, 0, 0) // Ensure we stay at midnight after adding a day
   }
+
   return dates
 }
