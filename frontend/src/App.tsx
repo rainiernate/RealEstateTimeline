@@ -1,5 +1,22 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, Edit2, Trash2 } from 'lucide-react'
+import { GiPartyPopper } from 'react-icons/gi'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // Basic Card Components
 const Card = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
@@ -36,6 +53,7 @@ interface Contingency {
   isPossessionDate: boolean
   status: ContingencyStatus
   completedDate?: string
+  order: number
 }
 
 interface TimelineItem {
@@ -48,6 +66,7 @@ interface TimelineItem {
   contingencyId?: string
   isPossessionDate?: boolean
   status: ContingencyStatus
+  order: number
 }
 
 interface SavedInstance {
@@ -70,7 +89,8 @@ const getDefaultContingencies = (mutualDate: string, closingDate: string): Conti
     days: 3,
     description: "Review and acknowledge receipt of seller disclosures",
     isPossessionDate: false,
-    status: 'pending'
+    status: 'pending',
+    order: 0
   },
   {
     id: crypto.randomUUID(),
@@ -79,7 +99,8 @@ const getDefaultContingencies = (mutualDate: string, closingDate: string): Conti
     days: 2,
     description: "Deposit earnest money with escrow",
     isPossessionDate: false,
-    status: 'pending'
+    status: 'pending',
+    order: 1
   },
   {
     id: crypto.randomUUID(),
@@ -88,7 +109,8 @@ const getDefaultContingencies = (mutualDate: string, closingDate: string): Conti
     days: 10,
     description: "Period to verify all transaction information",
     isPossessionDate: false,
-    status: 'pending'
+    status: 'pending',
+    order: 2
   },
   {
     id: crypto.randomUUID(),
@@ -97,7 +119,8 @@ const getDefaultContingencies = (mutualDate: string, closingDate: string): Conti
     days: 1,
     description: "All funds must be received by escrow",
     isPossessionDate: false,
-    status: 'pending'
+    status: 'pending',
+    order: 3
   }
 ]
 
@@ -115,7 +138,8 @@ const getHolidaysInRange = (startDate: string, endDate: string): Contingency[] =
         fixedDate: date.toISOString().split('T')[0],
         description: 'Federal Holiday - Banks Closed',
         isPossessionDate: false,
-        status: 'pending'
+        status: 'pending',
+        order: holidays.length
       })
     }
   }
@@ -199,21 +223,92 @@ function getDatesBetween(start: Date, end: Date): Date[] {
 }
 
 // Helper function to check if a date is a holiday
-const isHoliday = (date: Date): boolean => {
-  const holidays = getHolidaysInRange(
-    new Date(date.getFullYear(), 0, 1).toISOString().split('T')[0],
-    new Date(date.getFullYear(), 11, 31).toISOString().split('T')[0]
-  )
-  return holidays.some(holiday => {
-    const holidayDate = new Date(holiday.fixedDate!)
-    return holidayDate.getFullYear() === date.getFullYear() &&
-           holidayDate.getMonth() === date.getMonth() &&
-           holidayDate.getDate() === date.getDate()
-  })
+function isHoliday(date: Date): boolean {
+  const month = date.getMonth()
+  const day = date.getDate()
+  const dayOfWeek = date.getDay()
+  const year = date.getFullYear()
+
+  // New Year's Day
+  if (month === 0 && day === 1) return true
+
+  // Martin Luther King Jr. Day (3rd Monday in January)
+  if (month === 0 && dayOfWeek === 1 && day >= 15 && day <= 21) return true
+
+  // Presidents' Day (3rd Monday in February)
+  if (month === 1 && dayOfWeek === 1 && day >= 15 && day <= 21) return true
+
+  // Memorial Day (Last Monday in May)
+  if (month === 4 && dayOfWeek === 1 && day >= 25) return true
+
+  // Juneteenth
+  if (month === 5 && day === 19) return true
+
+  // Independence Day
+  if (month === 6 && day === 4) return true
+
+  // Labor Day (1st Monday in September)
+  if (month === 8 && dayOfWeek === 1 && day <= 7) return true
+
+  // Veterans Day
+  if (month === 10 && day === 11) return true
+
+  // Thanksgiving (4th Thursday in November)
+  if (month === 10 && dayOfWeek === 4 && day >= 22 && day <= 28) return true
+
+  // Day after Thanksgiving (Native American Heritage Day)
+  if (month === 10 && dayOfWeek === 5 && day >= 23 && day <= 29) return true
+
+  // Christmas
+  if (month === 11 && day === 25) return true
+
+  return false
+}
+
+// Helper function to get holiday name
+function getHolidayName(date: Date): string {
+  const month = date.getMonth()
+  const day = date.getDate()
+  const dayOfWeek = date.getDay()
+
+  // New Year's Day
+  if (month === 0 && day === 1) return "New Year's Day"
+
+  // Martin Luther King Jr. Day
+  if (month === 0 && dayOfWeek === 1 && day >= 15 && day <= 21) return "Martin Luther King Jr. Day"
+
+  // Presidents' Day
+  if (month === 1 && dayOfWeek === 1 && day >= 15 && day <= 21) return "Presidents' Day"
+
+  // Memorial Day
+  if (month === 4 && dayOfWeek === 1 && day >= 25) return "Memorial Day"
+
+  // Juneteenth
+  if (month === 5 && day === 19) return "Juneteenth"
+
+  // Independence Day
+  if (month === 6 && day === 4) return "Independence Day"
+
+  // Labor Day
+  if (month === 8 && dayOfWeek === 1 && day <= 7) return "Labor Day"
+
+  // Veterans Day
+  if (month === 10 && day === 11) return "Veterans Day"
+
+  // Thanksgiving
+  if (month === 10 && dayOfWeek === 4 && day >= 22 && day <= 28) return "Thanksgiving"
+
+  // Day after Thanksgiving
+  if (month === 10 && dayOfWeek === 5 && day >= 23 && day <= 29) return "Native American Heritage Day"
+
+  // Christmas
+  if (month === 11 && day === 25) return "Christmas"
+
+  return "Holiday"
 }
 
 // Helper function to check if a date is a business day
-const isBusinessDay = (date: Date): boolean => {
+function isBusinessDay(date: Date): boolean {
   // Check if it's a weekend
   if (date.getDay() === 0 || date.getDay() === 6) return false
   
@@ -224,7 +319,7 @@ const isBusinessDay = (date: Date): boolean => {
 }
 
 // Helper function to get next business day
-const getNextBusinessDay = (date: Date): Date => {
+function getNextBusinessDay(date: Date): Date {
   const nextDay = new Date(date)
   nextDay.setDate(nextDay.getDate() + 1)
   
@@ -236,7 +331,7 @@ const getNextBusinessDay = (date: Date): Date => {
 }
 
 // Helper function to get previous business day
-const getPreviousBusinessDay = (date: Date): Date => {
+function getPreviousBusinessDay(date: Date): Date {
   const prevDay = new Date(date)
   prevDay.setDate(prevDay.getDate() - 1)
   
@@ -248,7 +343,7 @@ const getPreviousBusinessDay = (date: Date): Date => {
 }
 
 // Calculate business days before a date
-const getBusinessDaysBeforeDate = (endDate: Date, daysNeeded: number): Date => {
+function getBusinessDaysBeforeDate(endDate: Date, daysNeeded: number): Date {
   let currentDate = new Date(endDate)
   let businessDaysFound = 0
   
@@ -341,16 +436,76 @@ function StatusDropdown({
   )
 }
 
+// Sortable Item Component
+function SortableItem({ contingency }: { contingency: Contingency }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: contingency.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`h-8 flex items-center cursor-move select-none
+        ${isDragging ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+    >
+      <span className="text-sm truncate select-none" title={contingency.name}>
+        {contingency.name}
+      </span>
+    </div>
+  )
+}
+
 // Gantt Chart Component
 function GanttChart({
   mutualDate,
   closingDate,
   contingencies,
+  onContingencyReorder
 }: {
   mutualDate: string
   closingDate: string
   contingencies: Contingency[]
+  onContingencyReorder: (reorderedContingencies: Contingency[]) => void
 }) {
+  const [items, setItems] = useState<Contingency[]>([])
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  useEffect(() => {
+    setItems(contingencies)
+  }, [contingencies])
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event
+
+    if (active.id !== over.id) {
+      const oldIndex = items.findIndex(item => item.id === active.id)
+      const newIndex = items.findIndex(item => item.id === over.id)
+
+      const newItems = arrayMove(items, oldIndex, newIndex)
+      setItems(newItems)
+      onContingencyReorder(newItems)
+    }
+  }
+
   const startDate = parseDate(mutualDate)
   const endDate = parseDate(closingDate)
   const today = new Date()
@@ -447,11 +602,20 @@ function GanttChart({
                   <span className="text-sm font-bold text-black">Mutual Acceptance</span>
                 </div>
                 {/* Contingency Titles */}
-                {contingencies.map((contingency) => (
-                  <div key={contingency.id} className="h-8 flex items-center">
-                    <span className="text-sm truncate" title={contingency.name}>{contingency.name}</span>
-                  </div>
-                ))}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={items.map(item => item.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {items.map((contingency) => (
+                      <SortableItem key={contingency.id} contingency={contingency} />
+                    ))}
+                  </SortableContext>
+                </DndContext>
                 {/* Closing Date */}
                 <div className="h-8 flex items-center">
                   <span className="text-sm font-bold text-black">Closing Date</span>
@@ -470,12 +634,30 @@ function GanttChart({
                   ))}
                 </div>
 
+                {/* Today's Line */}
+                {dates.map((date, index) => {
+                  const isToday = date.getTime() === today.getTime()
+                  if (isToday) {
+                    // Calculate position: 32px (w-8) per column, center by adding 16px
+                    const leftPosition = `${index * 32 + 16}px`
+                    return (
+                      <div 
+                        key={`today-${index}`}
+                        className="absolute top-0 bottom-0 w-[2px] bg-red-500"
+                        style={{ left: leftPosition }}
+                      />
+                    )
+                  }
+                  return null
+                })}
+
                 {/* Date Headers */}
                 <div className="flex h-8 relative">
                   {dates.map((date, index) => {
                     const isWeekend = date.getDay() === 0 || date.getDay() === 6
                     const isMutualDate = date.getTime() === startDate.getTime()
                     const isClosingDate = date.getTime() === endDate.getTime()
+                    const isHolidayDate = isHoliday(date)
                     
                     return (
                       <div 
@@ -483,9 +665,15 @@ function GanttChart({
                         className={`w-8 flex-shrink-0 text-center text-sm flex items-center justify-center
                           ${isWeekend ? 'font-bold' : ''}
                           ${isMutualDate || isClosingDate ? 'font-bold text-black' : ''}
+                          ${isHolidayDate ? 'text-red-500' : ''}
                         `}
+                        title={isHolidayDate ? getHolidayName(date) : undefined}
                       >
-                        {formatDate(date)}
+                        {isHolidayDate ? (
+                          <GiPartyPopper className="w-4 h-4" />
+                        ) : (
+                          formatDate(date)
+                        )}
                       </div>
                     )
                   })}
@@ -509,7 +697,7 @@ function GanttChart({
                 </div>
 
                 {/* Contingency Rows */}
-                {contingencies.map((contingency) => {
+                {items.map((contingency) => {
                   const startDateContingency = getContingencyStartDate(contingency)
                   const endDateContingency = getContingencyEndDate(contingency, startDateContingency)
 
@@ -734,7 +922,8 @@ function App() {
           method: "Start Date",
           notes: "",
           isContingency: false,
-          status: 'completed'
+          status: 'completed',
+          order: -1
         }
       ]
 
@@ -764,7 +953,8 @@ function App() {
           isContingency: true,
           contingencyId: contingency.id,
           isPossessionDate: contingency.isPossessionDate,
-          status: contingency.status
+          status: contingency.status,
+          order: contingency.order
         })
       })
 
@@ -776,10 +966,17 @@ function App() {
         method: "End Date",
         notes: "",
         isContingency: false,
-        status: 'pending'
+        status: 'pending',
+        order: Number.MAX_SAFE_INTEGER
       })
 
-      return items.sort((a, b) => a.date.getTime() - b.date.getTime())
+      // Sort by order first, then by date for items with same order
+      return items.sort((a, b) => {
+        if (a.order !== b.order) {
+          return a.order - b.order
+        }
+        return a.date.getTime() - b.date.getTime()
+      })
     }
 
     if (mutualDate && closingDate) {
@@ -798,8 +995,14 @@ function App() {
     setClosingDate(newClosingDate)
     setTimelineActive(true)
 
-    const defaultContingencies = getDefaultContingencies(newMutualDate, newClosingDate)
-    const holidays = getHolidaysInRange(newMutualDate, newClosingDate)
+    const defaultContingencies = getDefaultContingencies(newMutualDate, newClosingDate).map((c, index) => ({
+      ...c,
+      order: index
+    }))
+    const holidays = getHolidaysInRange(newMutualDate, newClosingDate).map((c, index) => ({
+      ...c,
+      order: defaultContingencies.length + index
+    }))
 
     setContingencies([...defaultContingencies, ...holidays])
   }
@@ -864,7 +1067,8 @@ function App() {
       type: contingencyType,
       description: contingencyDescription,
       isPossessionDate,
-      status: 'pending'
+      status: 'pending',
+      order: contingencies.length
     }
 
     if (contingencyType === 'fixed_date') {
@@ -974,6 +1178,15 @@ function App() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     }
+  }
+
+  const handleContingencyReorder = (reorderedContingencies: Contingency[]) => {
+    // Update the order of the contingencies
+    const updatedContingencies = reorderedContingencies.map((c, index) => ({
+      ...c,
+      order: index
+    }))
+    setContingencies(updatedContingencies)
   }
 
   return (
@@ -1125,7 +1338,7 @@ function App() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Mutual Acceptance Date
                       </label>
                       <input
@@ -1137,7 +1350,7 @@ function App() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Closing Date
                       </label>
                       <input
@@ -1157,6 +1370,7 @@ function App() {
                 mutualDate={mutualDate!}
                 closingDate={closingDate!}
                 contingencies={contingencies}
+                onContingencyReorder={handleContingencyReorder}
               />
 
               {/* Timeline Table */}
