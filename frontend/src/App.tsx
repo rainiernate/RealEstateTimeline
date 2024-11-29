@@ -3,7 +3,7 @@ import { ChevronRight, Edit2, Trash2 } from 'lucide-react'
 import { GiPartyPopper } from 'react-icons/gi'
 
 // Import types
-import { Contingency, TimelineItem } from './types/timeline'
+import { Contingency, TimelineInstance, SavedInstance } from './types/timeline'
 
 // Import components
 import { Card, CardHeader, CardTitle, CardContent } from './components/common/Card'
@@ -19,39 +19,80 @@ import { useTimelineInstances } from './hooks/useTimelineInstances'
 import { useContingencyForm } from './hooks/useContingencyForm'
 import { useTimelineData } from './hooks/useTimelineData'
 
-// Import constants
-import { getDefaultContingencies } from './constants/defaultContingencies'
+// Import utilities
+import { parseInputDate, formatInputDate, formatDisplayDate, DEFAULT_DISPLAY_OPTIONS, calculateDaysBetween } from './utils/dateUtils'
+import { getDefaultContingencies } from './utils/timelineUtils'
 
 function App() {
   // Primary State
-  const [mutualDate, setMutualDate] = useState<string | null>(null)
-  const [closingDate, setClosingDate] = useState<string | null>(null)
+  const [mutualDate, setMutualDate] = useState<Date | null>(null)
+  const [closingDate, setClosingDate] = useState<Date | null>(null)
   const [contingencies, setContingencies] = useState<Contingency[]>([])
   const [timelineActive, setTimelineActive] = useState(false)
-  const [showInitialSetup, setShowInitialSetup] = useState(false)
-
-  // Debug logging for date changes
-  useEffect(() => {
-    console.log('App Date State:', {
-      mutualDate,
-      closingDate,
-      timelineActive
-    })
-  }, [mutualDate, closingDate, timelineActive])
-
-  // UI State
-  const [showSidebar, setShowSidebar] = useState(true)
+  const [showInitialSetup, setShowInitialSetup] = useState(true)
   const [editingContingency, setEditingContingency] = useState<Contingency | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
 
+  // Debug logging for date changes
+  useEffect(() => {
+    const debugInfo = {
+      mutualDate: mutualDate ? formatInputDate(mutualDate) : null,
+      closingDate: closingDate ? formatInputDate(closingDate) : null,
+      timelineActive
+    }
+    console.log('App Date State:', debugInfo)
+  }, [mutualDate, closingDate, timelineActive])
+
+  // Load saved timeline if it exists
+  useEffect(() => {
+    const savedTimeline = localStorage.getItem('timeline')
+    if (savedTimeline) {
+      try {
+        const { mutualDate: savedMutual, closingDate: savedClosing, contingencies: savedContingencies } = JSON.parse(savedTimeline)
+        const parsedMutual = parseInputDate(savedMutual)
+        const parsedClosing = parseInputDate(savedClosing)
+        
+        if (parsedMutual && parsedClosing) {
+          console.log('Loading saved dates:', { parsedMutual, parsedClosing })
+          setMutualDate(parsedMutual)
+          setClosingDate(parsedClosing)
+          setContingencies(savedContingencies || [])
+          setTimelineActive(true)
+        }
+      } catch (error) {
+        console.error('Error loading saved timeline:', error)
+      }
+    }
+  }, [])
+
+  // Save timeline state
+  useEffect(() => {
+    if (timelineActive && mutualDate && closingDate) {
+      const timelineData = {
+        mutualDate: formatInputDate(mutualDate),
+        closingDate: formatInputDate(closingDate),
+        contingencies
+      }
+      localStorage.setItem('timeline', JSON.stringify(timelineData))
+    }
+  }, [timelineActive, mutualDate, closingDate, contingencies])
+
+  useEffect(() => {
+    console.log('Master Mutual Date Changed:', {
+      rawMutualDate: mutualDate,
+      parsedDate: mutualDate?.toISOString(),
+      localString: mutualDate ? formatDisplayDate(mutualDate, DEFAULT_DISPLAY_OPTIONS) : null
+    })
+  }, [mutualDate])
+
   // Custom Hooks
   const { timelineItems, handleTimelineReorder } = useTimelineData(mutualDate, closingDate, contingencies)
-  const [localTimelineItems, setLocalTimelineItems] = useState<TimelineItem[]>([])
+  const [localTimelineItems, setLocalTimelineItems] = useState<TimelineInstance[]>([])
   useEffect(() => {
     setLocalTimelineItems(timelineItems)
   }, [timelineItems])
 
-  const handleLocalTimelineReorder = (reorderedItems: TimelineItem[]) => {
+  const handleLocalTimelineReorder = (reorderedItems: TimelineInstance[]) => {
     setLocalTimelineItems(reorderedItems)
     handleTimelineReorder(reorderedItems)
   }
@@ -112,41 +153,82 @@ function App() {
     createNewTimeline()
   }
 
-  // Handle initial date setup
-  const handleInitialSetup = () => {
-    if (mutualDate && closingDate && instanceName) {
-      console.log('Timeline Activation:', {
-        mutualDate,
-        closingDate,
-        parsedMutual: new Date(mutualDate).toISOString(),
-        parsedClosing: new Date(closingDate).toISOString()
-      })
+  // When component mounts, start with new timeline
+  useEffect(() => {
+    const { mutualDate: newMutual, closingDate: newClosing } = createNewTimeline()
+    setMutualDate(newMutual)
+    setClosingDate(newClosing)
+  }, [])
+
+  // Handle date changes
+  const handleMutualDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = parseInputDate(e.target.value)
+    console.log('Setting Mutual Date:', {
+      input: e.target.value,
+      parsed: newDate,
+      formatted: newDate ? formatInputDate(newDate) : ''
+    })
+    setMutualDate(newDate)
+  }
+
+  const handleClosingDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = parseInputDate(e.target.value)
+    console.log('Setting Closing Date:', {
+      input: e.target.value,
+      parsed: newDate,
+      formatted: newDate ? formatInputDate(newDate) : ''
+    })
+    setClosingDate(newDate)
+  }
+
+  // Handle initial setup submission
+  const handleInitialSetup = (e: React.FormEvent) => {
+    e.preventDefault()
+    console.log('Initial Setup:', { 
+      mutualDate, 
+      closingDate, 
+      instanceName,
+      hasDefaultContingencies: !!getDefaultContingencies()
+    })
+    
+    if (mutualDate && closingDate && instanceName.trim()) {
+      const defaultContingencies = getDefaultContingencies()
+      console.log('Default contingencies:', defaultContingencies)
       
-      // Add default contingencies
-      const defaultContingencies = getDefaultContingencies(mutualDate, closingDate)
-      setContingencies(defaultContingencies)
+      // Save the timeline first
+      saveInstance(
+        new Date(mutualDate),  // Ensure we're passing Date objects
+        new Date(closingDate),
+        defaultContingencies
+      )
       
-      // Activate timeline
+      // Then update the UI
       setTimelineActive(true)
       setShowInitialSetup(false)
+      setContingencies(defaultContingencies)
       
-      // Save the new instance immediately
-      saveInstance(mutualDate, closingDate, defaultContingencies)
+      console.log('Timeline activated and saved')
+    } else {
+      console.warn('Missing required fields:', { 
+        hasMutualDate: !!mutualDate, 
+        hasClosingDate: !!closingDate, 
+        hasInstanceName: !!instanceName.trim() 
+      })
     }
   }
 
   // Handle loading an instance
-  const handleLoadInstance = (instance: any) => {
-    console.log('Loading Instance:', {
-      instanceMutualDate: instance.mutualDate,
-      instanceClosingDate: instance.closingDate,
-      currentMutualDate: mutualDate,
-      currentClosingDate: closingDate
-    })
-    setTimelineActive(true)
+  const handleLoadInstance = (instance: SavedInstance) => {
+    console.log('Loading instance:', instance)
+    
+    // Update all the state
     setMutualDate(instance.mutualDate)
     setClosingDate(instance.closingDate)
     setContingencies(instance.contingencies)
+    setTimelineActive(true)
+    setShowInitialSetup(false)
+    
+    // Load the instance in the timeline instances hook
     loadInstance(instance)
   }
 
@@ -202,63 +284,66 @@ function App() {
   }
 
   const handleEditContingency = (contingency: Contingency) => {
+    console.log('Opening modal with dates:', {
+      mutualDate: mutualDate?.toISOString(),
+      parsedMutualDate: mutualDate?.toISOString(),
+      localMutualDate: mutualDate ? formatDisplayDate(mutualDate, DEFAULT_DISPLAY_OPTIONS) : null
+    })
     setEditingContingency(contingency)
     setShowAddModal(true)
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 transition-all duration-300 ${showSidebar ? 'w-80' : 'w-0'} overflow-hidden`}>
-        <div className="p-4">
-          <div className="flex flex-col gap-4">
+      {/* Sidebar - Always visible */}
+      <div className="fixed top-0 left-0 h-full w-80 bg-white border-r border-gray-200 overflow-y-auto">
+        <div className="p-6">
+          <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">Saved Timelines</h2>
+              <h2 className="text-lg font-semibold">Saved Timelines</h2>
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="text-sm text-blue-600 hover:text-blue-800"
               >
-                {showArchived ? 'Show Active' : 'Show Archived'}
+                {showArchived ? 'Hide Archived' : 'Show Archived'}
               </button>
             </div>
 
-            {/* Instance List */}
+            {/* Timeline List */}
             <div className="space-y-2">
-              {savedInstances.map((instance) => (
+              {savedInstances.map(instance => (
                 <div
                   key={instance.id}
                   onClick={() => handleLoadInstance(instance)}
                   className={`
-                    p-3 rounded-lg cursor-pointer flex justify-between items-center
+                    p-3 rounded-lg cursor-pointer
                     ${selectedInstance === instance.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50'}
+                    ${instance.isArchived ? 'opacity-60' : ''}
                   `}
                 >
-                  <div className="flex-1">
-                    <div className="font-medium">{instance.name}</div>
-                    <div className="text-sm text-gray-500">
-                      Created: {new Date(instance.createdAt).toLocaleDateString()}
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">{instance.name}</span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleArchiveInstance(instance.id)
+                        }}
+                        className="p-1 rounded hover:bg-gray-200"
+                        title={instance.isArchived ? 'Unarchive' : 'Archive'}
+                      >
+                        {instance.isArchived ? '📤' : '📥'}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteInstance(instance.id)
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 text-red-500"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleArchiveInstance(instance.id)
-                      }}
-                      className="p-1 rounded hover:bg-gray-200"
-                      title={instance.isArchived ? 'Unarchive' : 'Archive'}
-                    >
-                      {instance.isArchived ? '📤' : '📥'}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteInstance(instance.id)
-                      }}
-                      className="p-1 rounded hover:bg-gray-200 text-red-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
               ))}
@@ -267,102 +352,17 @@ function App() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden flex flex-col ml-80">
-        {!showSidebar && (
-          <button
-            onClick={() => setShowSidebar(true)}
-            className="fixed left-4 top-4 p-2 rounded-md shadow-md bg-white hover:bg-gray-50 transition-colors duration-200"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        )}
-
-        <div className="container mx-auto max-w-7xl p-6 space-y-6 overflow-y-auto">
-          {!timelineActive && !showInitialSetup && (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <h1 className="text-2xl font-bold text-gray-900">Welcome to Timeline Manager</h1>
-                <p className="text-gray-600">Create a new timeline or load an existing one to get started.</p>
-                <div className="flex justify-center gap-4">
-                  <ActionButton onClick={handleNewTimeline}>Create New Timeline</ActionButton>
-                  <ActionButton onClick={() => setShowArchived(!showArchived)}>
-                    {showArchived ? 'Hide Archived' : 'Show Archived'}
-                  </ActionButton>
-                </div>
-              </div>
-            </div>
-          )}
-
+      {/* Main Content - Always offset by sidebar width */}
+      <div className="flex-1 ml-80">
+        <div className="container mx-auto max-w-7xl p-6 space-y-6">
           {showInitialSetup && (
-            <div className="max-w-md mx-auto mt-8">
+            <div className="max-w-2xl mx-auto">
               <Card>
                 <CardHeader>
                   <CardTitle>Create New Timeline</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Timeline Name</label>
-                      <input
-                        type="text"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        value={instanceName}
-                        onChange={(e) => setInstanceName(e.target.value)}
-                        placeholder="Enter timeline name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Mutual Acceptance Date</label>
-                      <input
-                        type="date"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        value={mutualDate || ''}
-                        onChange={(e) => {
-                          console.log('Setting Mutual Date:', e.target.value)
-                          setMutualDate(e.target.value)
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Closing Date</label>
-                      <input
-                        type="date"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        value={closingDate || ''}
-                        onChange={(e) => {
-                          console.log('Setting Closing Date:', e.target.value)
-                          setClosingDate(e.target.value)
-                        }}
-                      />
-                    </div>
-                    <div className="pt-4">
-                      <ActionButton
-                        onClick={handleInitialSetup}
-                        disabled={!mutualDate || !closingDate || !instanceName}
-                        className="w-full"
-                      >
-                        Continue
-                      </ActionButton>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {timelineActive && (
-            // Active timeline view
-            <>
-              {/* Timeline Settings */}
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle>Timeline Settings</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 gap-6">
+                  <form onSubmit={handleInitialSetup} className="space-y-6">
                     {/* Timeline Name */}
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
@@ -374,31 +374,23 @@ function App() {
                         onChange={(e) => setInstanceName(e.target.value)}
                         placeholder="Enter timeline name"
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
                       />
                     </div>
 
-                    {/* Dates Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Date Inputs */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="block text-sm font-medium text-gray-700">
                           Mutual Acceptance Date
                         </label>
                         <input
                           type="date"
-                          value={mutualDate || ''}
-                          onChange={(e) => {
-                            console.log('Setting Mutual Date:', e.target.value)
-                            setMutualDate(e.target.value)
-                          }}
+                          value={mutualDate ? formatInputDate(mutualDate) : ''}
+                          onChange={handleMutualDateChange}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
                         />
-                        <div className="text-sm text-gray-500">
-                          {mutualDate && new Date(mutualDate).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="block text-sm font-medium text-gray-700">
@@ -406,106 +398,142 @@ function App() {
                         </label>
                         <input
                           type="date"
-                          value={closingDate || ''}
-                          onChange={(e) => {
-                            console.log('Setting Closing Date:', e.target.value)
-                            setClosingDate(e.target.value)
-                          }}
+                          value={closingDate ? formatInputDate(closingDate) : ''}
+                          onChange={handleClosingDateChange}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
                         />
-                        <div className="text-sm text-gray-500">
-                          {closingDate && new Date(closingDate).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Timeline Duration
-                        </label>
-                        <div className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50">
-                          {mutualDate && closingDate && (
-                            <span className="font-medium">
-                              {Math.round((new Date(closingDate).getTime() - new Date(mutualDate).getTime()) / (1000 * 60 * 60 * 24))} days
-                            </span>
-                          )}
-                        </div>
                       </div>
                     </div>
-                  </div>
+
+                    {/* Submit Button */}
+                    <div className="flex justify-end">
+                      <ActionButton
+                        type="submit"
+                        disabled={!mutualDate || !closingDate || !instanceName.trim()}
+                        className="w-full"
+                      >
+                        Continue
+                      </ActionButton>
+                    </div>
+                  </form>
                 </CardContent>
               </Card>
+            </div>
+          )}
 
-              {/* Timeline Content */}
-              {mutualDate && closingDate && (
-                <>
-                  {/* Timeline Gantt */}
-                  <div className="flex-1 min-w-0">
-                    <TimelineGantt
-                      timelineItems={localTimelineItems}
-                      mutualDate={mutualDate || ''}
-                      closingDate={closingDate || ''}
-                      contingencies={contingencies}
-                      onContingencyReorder={handleContingencyReorder}
-                      onTimelineItemsReorder={handleLocalTimelineReorder}
-                      onContingencyClick={handleEditContingency}
+          {!showInitialSetup && timelineActive && (
+            <div className="timeline-content">
+              {/* Timeline Settings Section */}
+              <div className="bg-white shadow rounded-lg p-4 mb-4">
+                <h3 className="text-lg font-semibold mb-4">Timeline Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mutual Date
+                    </label>
+                    <div className="flex items-center">
+                      <input
+                        type="date"
+                        value={mutualDate ? formatInputDate(mutualDate) : ''}
+                        onChange={handleMutualDateChange}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Closing Date
+                    </label>
+                    <div className="flex items-center">
+                      <input
+                        type="date"
+                        value={closingDate ? formatInputDate(closingDate) : ''}
+                        onChange={handleClosingDateChange}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Duration
+                    </label>
+                    <div className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50">
+                      {mutualDate && closingDate 
+                        ? `${calculateDaysBetween(mutualDate, closingDate)} days`
+                        : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Timeline Name
+                    </label>
+                    <input
+                      type="text"
+                      value={instanceName}
+                      onChange={(e) => setInstanceName(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                </div>
+              </div>
 
-                  {/* Milestone Table */}
-                  <div className="mt-8">
-                    <MilestoneTable
-                      timelineItems={localTimelineItems}
-                      contingencies={contingencies}
-                      onEditContingency={handleEditContingency}
-                      onDeleteContingency={handleDeleteContingency}
-                      onUpdateContingency={handleUpdateContingency}
-                      onAddContingency={() => {
-                        setEditingContingency(null)
-                        setShowAddModal(true)
-                      }}
-                    />
-                  </div>
-                </>
-              )}
-            </>
+              {/* Timeline View */}
+              <TimelineGantt
+                timelineItems={localTimelineItems}
+                mutualDate={formatInputDate(mutualDate)}
+                closingDate={formatInputDate(closingDate)}
+                contingencies={contingencies}
+                onContingencyReorder={handleContingencyReorder}
+                onTimelineItemsReorder={handleLocalTimelineReorder}
+                onContingencyClick={(contingency) => {
+                  setEditingContingency(contingency)
+                }}
+              />
+
+              {/* Milestone Table */}
+              <div className="mt-8">
+                <MilestoneTable
+                  timelineItems={localTimelineItems}
+                  contingencies={contingencies}
+                  onEditContingency={handleEditContingency}
+                  onDeleteContingency={handleDeleteContingency}
+                  onUpdateContingency={handleUpdateContingency}
+                  onAddContingency={() => {
+                    setEditingContingency(null)
+                    setShowAddModal(true)
+                  }}
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {/* Add/Edit Contingency Modal */}
       {(showAddModal || editingContingency) && (
-        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">
-              {editingContingency ? 'Edit Contingency' : 'Add Contingency'}
-            </h2>
-            <ContingencyForm
-              mutualDate={mutualDate!}
-              closingDate={closingDate!}
-              initialValues={editingContingency || undefined}
-              onSubmit={(contingency) => {
-                if (editingContingency) {
-                  handleUpdateContingency({
-                    ...contingency,
-                    id: editingContingency.id,
-                    status: editingContingency.status // Preserve the status
-                  })
-                } else {
-                  handleAddContingency(contingency)
-                }
-                setShowAddModal(false)
-                setEditingContingency(null)
-              }}
-              onCancel={() => {
-                setShowAddModal(false)
-                setEditingContingency(null)
-              }}
-            />
-          </div>
-        </div>
+        <ContingencyForm
+          mutualDate={mutualDate!}
+          closingDate={closingDate!}
+          initialValues={editingContingency || undefined}
+          onSubmit={(contingency) => {
+            if (editingContingency) {
+              handleUpdateContingency({
+                ...contingency,
+                id: editingContingency.id,
+                status: editingContingency.status
+              })
+            } else {
+              handleAddContingency(contingency)
+            }
+            setShowAddModal(false)
+            setEditingContingency(null)
+          }}
+          onCancel={() => {
+            setShowAddModal(false)
+            setEditingContingency(null)
+          }}
+        />
       )}
     </div>
   )

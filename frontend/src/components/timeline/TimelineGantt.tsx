@@ -18,6 +18,8 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../common/Card'
 import { ActionButton } from '../common/ActionButton'
 import { SortableItem } from './SortableItem'
+import { formatDisplayDate, parseInputDate } from '../../utils/dateUtils'
+import { REFERENCE_HOUR } from '../../utils/dateUtils';
 
 interface TimelineGanttProps {
   timelineItems: TimelineItem[]
@@ -47,7 +49,16 @@ export function TimelineGantt({
     closingDateObj: new Date(closingDate)
   })
 
-  const today = useMemo(() => new Date(), [])
+  // Get today's date using the same parsing logic as other dates
+  const today = useMemo(() => {
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    console.log('Today string:', todayStr)
+    const parsedToday = parseInputDate(todayStr)
+    console.log('Parsed today:', parsedToday)
+    return parsedToday
+  }, [])
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -162,7 +173,7 @@ export function TimelineGantt({
         <div className="flex justify-between items-center">
           <CardTitle>Timeline</CardTitle>
           <CardDescription>
-            From {mutualDate} to {closingDate}
+            {mutualDate ? formatDisplayDate(new Date(mutualDate)) : 'No start date'} - {closingDate ? formatDisplayDate(new Date(closingDate)) : 'No end date'}
           </CardDescription>
           <ActionButton
             variant="secondary"
