@@ -33,14 +33,16 @@ export function ContingencyForm({
 }: ContingencyFormProps) {
   const [name, setName] = useState(initialValues?.name || '')
   const [type, setType] = useState<ContingencyType>(initialValues?.type || 'days_from_mutual')
-  const [days, setDays] = useState<string>(initialValues?.days?.toString() || '')
-  const [fixedDate, setFixedDate] = useState<Date | null>(initialValues?.fixedDate ? parseInputDate(initialValues.fixedDate) : null)
+  const [days, setDays] = useState(initialValues?.days?.toString() || '')
+  const [fixedDate, setFixedDate] = useState(initialValues?.fixed_date || '')
+  const [startDate, setStartDate] = useState(initialValues?.start_date || '')
+  const [endDate, setEndDate] = useState(initialValues?.end_date || '')
   const [description, setDescription] = useState(initialValues?.description || '')
   const [showDebug, setShowDebug] = useState(false);
 
   // Calculate the target date based on current inputs
   const targetDate = useMemo(() => {
-    if (!days && type !== 'fixed_date') return null;
+    if (!days && type !== 'fixed_date' && type !== 'fixed_period') return null;
 
     const contingency: Contingency = {
       id: 'preview',
@@ -53,7 +55,12 @@ export function ContingencyForm({
     };
 
     if (type === 'fixed_date') {
-      contingency.fixedDate = formatInputDate(fixedDate);
+      contingency.fixed_date = formatInputDate(fixedDate);
+    }
+
+    if (type === 'fixed_period') {
+      contingency.start_date = formatInputDate(startDate);
+      contingency.end_date = formatInputDate(endDate);
     }
 
     const dates = TimelineEngine.calculateContingencyDates(
@@ -63,11 +70,11 @@ export function ContingencyForm({
     );
 
     return dates?.targetDate || null;
-  }, [type, days, mutualDate, closingDate, fixedDate, name, description]);
+  }, [type, days, mutualDate, closingDate, fixedDate, startDate, endDate, name, description]);
 
   // Debug information for target date calculation
   const contingency = useMemo(() => {
-    if (!days && type !== 'fixed_date') return null;
+    if (!days && type !== 'fixed_date' && type !== 'fixed_period') return null;
 
     return {
       id: 'preview',
@@ -78,7 +85,7 @@ export function ContingencyForm({
       status: 'pending',
       order: 0
     };
-  }, [type, days, mutualDate, closingDate, fixedDate, name, description]);
+  }, [type, days, mutualDate, closingDate, fixedDate, startDate, endDate, name, description]);
 
   const debugInfo = useMemo(() => {
     if (!contingency || !mutualDate || !closingDate) return null
@@ -92,29 +99,26 @@ export function ContingencyForm({
 
     // Parse all dates to ensure they are Date objects
     const startDate = dates.startDate ? TimelineEngine.parseDate(dates.startDate) : null
-    const targetDate = dates.targetDate ? TimelineEngine.parseDate(dates.targetDate) : null
     const endDate = dates.endDate ? TimelineEngine.parseDate(dates.endDate) : null
 
     return {
       contingency,
       startDate,
-      targetDate,
       endDate,
       useBusinessDays: contingency.days <= 5,
       daysToCount: contingency.days,
       type: contingency.type,
-      fixedDate: contingency.fixedDate ? TimelineEngine.parseDate(contingency.fixedDate) : null
+      fixedDate: contingency.fixed_date ? TimelineEngine.parseDate(contingency.fixed_date) : null
     }
   }, [contingency, mutualDate, closingDate])
 
   // Calculate day-by-day breakdown
   const debugDayBreakdown = useMemo(() => {
-    if (!debugInfo?.startDate || !debugInfo?.targetDate || !debugInfo?.endDate) return []
+    if (!debugInfo?.startDate || !debugInfo?.endDate) return []
     
-    // For days_before_closing, we want to show from target date to end date
-    const isBeforeClosing = debugInfo.type === 'days_before_closing'
-    const start = isBeforeClosing ? debugInfo.targetDate : debugInfo.startDate
-    const end = isBeforeClosing ? debugInfo.endDate : debugInfo.targetDate
+    // Get the date range based on the contingency type
+    const start = debugInfo.startDate
+    const end = debugInfo.endDate
     
     if (!start || !end) return []
 
@@ -140,16 +144,23 @@ export function ContingencyForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || (!days && type !== 'fixed_date') || (type === 'fixed_date' && !fixedDate)) return;
+    if (!name || 
+        (!days && type !== 'fixed_date' && type !== 'fixed_period') || 
+        (type === 'fixed_date' && !fixedDate) ||
+        (type === 'fixed_period' && (!startDate || !endDate))) return;
 
     onSubmit({
       name,
       type,
-      days: type !== 'fixed_date' ? parseInt(days) : undefined,
-      fixedDate: type === 'fixed_date' ? formatInputDate(fixedDate) : undefined,
+      days: type !== 'fixed_date' && type !== 'fixed_period' ? parseInt(days) : undefined,
+      fixed_date: type === 'fixed_date' ? formatInputDate(fixedDate) : undefined,
+      start_date: type === 'fixed_period' ? formatInputDate(startDate) : undefined,
+      end_date: type === 'fixed_period' ? formatInputDate(endDate) : undefined,
       description,
       id: initialValues?.id || Math.random().toString(),
-      status: initialValues?.status || 'pending'
+      status: initialValues?.status || 'pending',
+      order: initialValues?.order || 0,
+      isPossessionDate: initialValues?.isPossessionDate || false
     });
   };
 
@@ -211,21 +222,11 @@ export function ContingencyForm({
               <option value="days_from_mutual">Days from Mutual</option>
               <option value="days_before_closing">Days before Closing</option>
               <option value="fixed_date">Fixed Date</option>
+              <option value="fixed_period">Fixed Period</option>
             </select>
           </div>
 
-          {type === 'fixed_date' ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Date</label>
-              <input
-                type="date"
-                value={formatInputDate(fixedDate)}
-                onChange={(e) => setFixedDate(parseInputDate(e.target.value))}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
-              />
-            </div>
-          ) : (
+          {type !== 'fixed_date' && type !== 'fixed_period' && (
             <div>
               <label className="block text-sm font-medium text-gray-700">Days</label>
               <input
@@ -237,6 +238,44 @@ export function ContingencyForm({
                 min="0"
               />
             </div>
+          )}
+
+          {type === 'fixed_date' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Date</label>
+              <input
+                type="date"
+                value={formatInputDate(fixedDate)}
+                onChange={(e) => setFixedDate(parseInputDate(e.target.value))}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+          )}
+
+          {type === 'fixed_period' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                <input
+                  type="date"
+                  value={formatInputDate(startDate)}
+                  onChange={(e) => setStartDate(parseInputDate(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">End Date</label>
+                <input
+                  type="date"
+                  value={formatInputDate(endDate)}
+                  onChange={(e) => setEndDate(parseInputDate(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </>
           )}
 
           <div className="mt-4">
@@ -255,8 +294,6 @@ export function ContingencyForm({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="text-gray-600">Start Date:</div>
                   <div>{formatDisplayDate(debugInfo.startDate)}</div>
-                  <div className="text-gray-600">Target Date:</div>
-                  <div>{formatDisplayDate(debugInfo.targetDate)}</div>
                   <div className="text-gray-600">End Date:</div>
                   <div>{formatDisplayDate(debugInfo.endDate)}</div>
                   <div className="text-gray-600">Type:</div>
@@ -296,7 +333,10 @@ export function ContingencyForm({
             <ActionButton onClick={onCancel} variant="secondary">
               Cancel
             </ActionButton>
-            <ActionButton type="submit" disabled={!name || (!days && type !== 'fixed_date')}>
+            <ActionButton type="submit" disabled={!name || 
+                (!days && type !== 'fixed_date' && type !== 'fixed_period') || 
+                (type === 'fixed_date' && !fixedDate) ||
+                (type === 'fixed_period' && (!startDate || !endDate))}>
               {initialValues ? 'Update Contingency' : 'Add Contingency'}
             </ActionButton>
           </div>

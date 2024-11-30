@@ -1,4 +1,4 @@
-export type ContingencyType = 'days_from_mutual' | 'days_before_closing' | 'fixed_date'
+export type ContingencyType = 'days_from_mutual' | 'days_before_closing' | 'fixed_date' | 'fixed_period'
 export type ContingencyStatus = 
   | 'not_started'
   | 'in_progress'
@@ -13,12 +13,14 @@ export interface Contingency {
   id: string
   name: string
   type: ContingencyType
-  days: number
-  fixedDate?: string
+  days?: number
+  fixed_date?: string
+  start_date?: string
+  end_date?: string
   description?: string
   isPossessionDate: boolean
   status: ContingencyStatus
-  completedDate?: string
+  completedDate?: Date
   order: number
 }
 
@@ -40,10 +42,10 @@ export interface TimelineItem {
 export interface SavedInstance {
   id: string
   name: string
-  mutualDate: string
-  closingDate: string
+  mutualDate: Date
+  closingDate: Date
   contingencies: Contingency[]
-  createdAt: string
-  lastModified?: string
+  createdAt: Date
+  lastModified?: Date
   isArchived?: boolean
 }
